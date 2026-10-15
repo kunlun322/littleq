@@ -1,0 +1,10 @@
+{
+  "name": "@littleq/runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "openai": "0.0.0-fixture"
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "description": "LittleQ 边界约束的唯一事实来源。tools/check-dependency-graph.mjs（CI 门禁）与 eslint.config.mjs（编辑器即时反馈）都从这里生成规则，避免两处规则漂移。每条规则都锚定 ZLQ-153 的具体条款。",
+  "sourceExtensions": [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
+  "manifestFields": ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"],
+  "rules": [
+    {
+      "id": "domain-no-platform-sdk",
+      "spec": "ZLQ-153 §1.3 / §3.1 / §5.4",
+      "description": "packages/domain 不得依赖 NestJS / Vercel / PostgreSQL / D1 等平台 SDK；领域层只依赖 TypeScript 标准类型。",
+      "from": ["packages/domain"],
+      "appliesTo": ["source", "manifest"],
+      "deny": {
+        "packagePrefixes": [
+          "@nestjs/",
+          "@fastify/",
+          "@vercel/",
+          "@aws-sdk/",
+          "@cloudflare/",
+          "@libsql/",
+          "drizzle-",
+          "next",
+          "react"
+        ],
+        "packages": [
+          "pg",
+          "postgres",
+          "mysql2",
+          "better-sqlite3",
+          "minio",
+          "fastify",
+          "express",
+          "cookie",
+          "@types/pg"
+        ]
+      }
+    },
+    {
+      "id": "domain-and-application-no-drivers",
+      "spec": "ZLQ-153 §5.4(4)",
+      "description": "CI 中 packages/domain 与 packages/application 禁止导入 drivers/*；静态依赖图违规即失败。packages/application 目前尚未在 §1.3 目录中出现，规则按路径预先生效，该包一旦落地即被约束。",
+      "from": ["packages/domain", "packages/application"],
+      "appliesTo": ["source"],
+      "deny": {
+        "sourcePathGlobs": ["**/drivers/**", "**/driver/**"]
+      }
+    },
+    {
+      "id": "domain-no-workspace-deps",
+      "spec": "ZLQ-153 §3.1",
+      "description": "领域层不依赖本仓库任何其它单元（不反向依赖 infra / app）。",
+      "from": ["packages/domain"],
+      "appliesTo": ["source", "manifest"],
+      "deny": {
+        "units": ["apps/*", "packages/*"]
+      }
+    },
+    {
+      "id": "runtime-no-main-site-secrets",
+      "spec": "ZLQ-153 §1.3（apps/runtime 明确不负责）",
+      "description": "作品运行时不访问主站 Cookie / 数据库 / AI 凭证：禁止任何数据库、Cookie、对象存储与模型供应商 SDK。",
+      "from": ["apps/runtime"],
+      "appliesTo": ["source", "manifest"],
+      "deny": {
+        "packagePrefixes": [
+          "@nestjs/",
+          "@fastify/",
+          "@vercel/",
+          "@aws-sdk/",
+          "@cloudflare/",
+          "@libsql/",
+          "@ai-sdk/",
+          "@anthropic-ai/",
+          "@google/",
+          "drizzle-",
+          "openai",
+          "dashscope"
+        ],
+        "packages": ["pg", "postgres", "mysql2", "better-sqlite3", "minio", "cookie", "@types/pg"]
+      }
+    },
+    {
+      "id": "runtime-no-main-site-units",
+      "spec": "ZLQ-153 §1.3 / §3.1",
+      "description": "作品运行时是隔离沙箱侧进程，不得导入持有主站 Cookie / 数据库 / AI 凭证的单元（apps/web、apps/api、apps/worker、packages/infra）；packages/work-contract 与 packages/design-system 不在禁止之列。",
+      "from": ["apps/runtime"],
+      "appliesTo": ["source", "manifest"],
+      "deny": {
+        "units": ["apps/web", "apps/api", "apps/worker", "packages/infra"]
+      }
+    },
+    {
+      "id": "web-no-ai-credentials",
+      "spec": "ZLQ-153 §1.3（apps/web 不持有 AI 凭证）",
+      "description": "前端不得持有 AI 凭证：禁止引入任何模型供应商 SDK。",
+      "from": ["apps/web"],
+      "appliesTo": ["source", "manifest"],
+      "deny": {
+        "packagePrefixes": ["@ai-sdk/", "@anthropic-ai/", "@google/", "openai", "dashscope"]
+      }
+    },
+    {
+      "id": "design-system-no-business-coupling",
+      "spec": "ZLQ-153 §1.3（packages/design-system 不耦合业务数据请求）",
+      "description": "设计系统不得依赖领域模型、基础设施或任何应用单元。",
+      "from": ["packages/design-system"],
+      "appliesTo": ["source", "manifest"],
+      "deny": {
+        "units": ["apps/*", "packages/domain", "packages/infra", "packages/work-contract"]
+      }
+    },
+    {
+      "id": "work-contract-no-platform-coupling",
+      "spec": "ZLQ-153 §1.3 / §3.1",
+      "description": "作品契约是纯 schema/校验层，不依赖平台 SDK、基础设施与应用单元。",
+      "from": ["packages/work-contract"],
+      "appliesTo": ["source", "manifest"],
+      "deny": {
+        "units": ["apps/*", "packages/infra", "packages/design-system"],
+        "packagePrefixes": [
+          "@nestjs/",
+          "@fastify/",
+          "@vercel/",
+          "@aws-sdk/",
+          "@cloudflare/",
+          "@libsql/",
+          "drizzle-"
+        ],
+        "packages": ["pg", "postgres", "mysql2", "better-sqlite3", "minio"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "name": "littleq",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "LittleQ — 面向 K12 学生的 AI 编程与创作平台（AGPL-3.0-only）",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=12.11.2"
+  },
+  "packageManager": "pnpm@12.11.2",
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json && tsc -p tools/tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "dep-graph": "node tools/check-dependency-graph.mjs",
+    "dep-graph:control": "node tools/check-dependency-graph.mjs --root tools/__fixtures__/dep-graph-violation --expect-failures 7",
+    "license:scan": "node tools/license/scan.mjs",
+    "license:scan:strict": "node tools/license/scan.mjs --strict",
+    "license:bundle": "node tools/license/bundle-scan.mjs",
+    "license:third-party": "node tools/license/third-party.mjs",
+    "license:third-party:check": "node tools/license/third-party.mjs --check",
+    "license:image": "node tools/license/image-scan.mjs",
+    "license:control": "node tools/license/control.mjs",
+    "bundles": "node tools/build-bundles.mjs",
+    "sbom:generate": "node tools/license/sbom.mjs",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e:smoke": "playwright test",
+    "verify": "pnpm build && pnpm typecheck && pnpm lint && pnpm format:check && pnpm dep-graph && pnpm dep-graph:control && pnpm bundles && pnpm license:scan && pnpm license:bundle && pnpm license:third-party:check && pnpm sbom:generate && pnpm license:image && pnpm license:control && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.5",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "esbuild": "0.28.2",
+    "eslint": "10.12.0",
+    "globals": "17.13.0",
+    "playwright": "1.64.1",
+    "prettier": "3.8.1",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.71.2",
+    "vitest": "5.0.5",
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "spec": "ZLQ-153 §10.3 / §13.1(V11)；CONTRIBUTING.md「依赖许可证准入规则」",
+  "note": "本项目以 AGPL-3.0-only 发布，具有网络传染性。allowed 采用 ZLQ-153 §10.3 与本任务书一致的六项白名单；CONTRIBUTING.md 中更宽的白名单（Zlib、Unlicense、CC0-1.0、MPL-2.0、AGPL-3.0、GPL-3.0-or-later）在本门禁里一律降级为 reviewRequired，由架构师逐案裁定后再提升，已在 ZLQ-159 交付评论中声明该差异。",
+  "allowed": ["MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "0BSD"],
+  "reviewRequired": {
+    "note": "命中即输出「待架构师评审清单」，CI 以退出码 2 标记为需人工裁定：既不静默通过，也不按禁止项一律判死。在 adjudications 中登记架构师结论后方可通过。",
+    "exact": [
+      "MPL-2.0",
+      "MPL-1.1",
+      "MPL-2.0-no-copyleft-exception",
+      "GPL-3.0-only",
+      "GPL-3.0-or-later",
+      "GPL-3.0",
+      "GPL-2.0-or-later",
+      "AGPL-3.0-only",
+      "AGPL-3.0-or-later",
+      "AGPL-3.0",
+      "LGPL-2.1-only",
+      "LGPL-2.1-or-later",
+      "LGPL-2.1",
+      "LGPL-3.0-only",
+      "LGPL-3.0-or-later",
+      "LGPL-3.0",
+      "EPL-1.0",
+      "EPL-2.0",
+      "CDDL-1.0",
+      "CDDL-1.1",
+      "BlueOak-1.0.0",
+      "Zlib",
+      "zlib-acknowledgement",
+      "Unlicense",
+      "CC0-1.0",
+      "CC-BY-3.0",
+      "CC-BY-4.0",
+      "CC-BY-SA-4.0",
+      "OFL-1.1",
+      "Python-2.0",
+      "Artistic-2.0",
+      "WTFPL",
+      "UPL-1.0"
+    ]
+  },
+  "forbidden": {
+    "note": "命中即硬性失败（退出码 1），无豁免通道。GPL-2.0-only 与 AGPL-3.0 不兼容，依 CONTRIBUTING.md 列为禁止。",
+    "exact": [
+      "GPL-2.0-only",
+      "GPL-2.0",
+      "SSPL-1.0",
+      "BUSL-1.1",
+      "Elastic-2.0",
+      "Elastic-License-2.0",
+      "UNLICENSED",
+      "NOASSERTION",
+      "CC-BY-NC-4.0",
+      "CC-BY-NC-SA-4.0",
+      "CC-BY-NC-ND-4.0",
+      "CC-BY-NC-3.0"
+    ],
+    "substringCaseInsensitive": [
+      "commons clause",
+      "see license in",
+      "commercial only",
+      "commercial-only",
+      "non-commercial",
+      "non commercial",
+      "noncommercial",
+      "source available",
+      "source-available",
+      "proprietary",
+      "no license",
+      "busl",
+      "sspl",
+      "elastic license"
+    ]
+  },
+  "spdx": {
+    "knownExceptions": [
+      "Classpath-exception-2.0",
+      "GCC-exception-3.1",
+      "LLVM-exception",
+      "Bison-exception-2.2",
+      "OpenSSL-exception",
+      "Autoconf-exception-3.0"
+    ]
+  },
+  "adjudications": {
+    "note": "命中 reviewRequired 的依赖必须在此登记，否则门禁以退出码 2 失败。status=pending-architect 表示已记录、已输出待评审清单、但尚未裁定：扫描器会大声报告（stdout + artifacts/license-report.json + CI step summary）却不判死，这正是 issue 要求的「既不静默通过，也不一律判死」。架构师裁定后把 status 改为 approved 或 rejected；approved 视同 allowed，rejected 视同 forbidden。--strict 模式下 pending-architect 也返回退出码 2，供裁定完成后回归检查。",
+    "statusValues": ["pending-architect", "approved", "rejected"],
+    "entries": [
+      {
+        "id": "minimatch-blueoak-1.0.0",
+        "status": "pending-architect",
+        "license": "BlueOak-1.0.0",
+        "match": { "names": ["minimatch"], "versions": ["10.2.6"] },
+        "distributed": false,
+        "usage": "eslint 配置解析的 glob 匹配，仅构建期使用，不进入任何交付产物",
+        "introducedBy": [
+          "devDependency eslint@10.12.0",
+          "@eslint/config-array@0.23.5",
+          "minimatch@10.2.6"
+        ],
+        "links": [
+          "https://blueoakmodelcouncil.org/model/1.0.0",
+          "https://www.npmjs.com/package/minimatch/v/10.2.6",
+          "https://github.com/isaacs/minimatch"
+        ],
+        "reason": "BlueOak-1.0.0 是宽松许可（意图等价于 MIT），但不在 ZLQ-153 §10.3 的六项白名单内，因此按规则升级给架构师确认，而不是自行放行。",
+        "requestedReviewer": "架构师",
+        "raisedIn": "ZLQ-159"
+      },
+      {
+        "id": "lightningcss-mpl-2.0",
+        "status": "pending-architect",
+        "license": "MPL-2.0",
+        "match": { "namePrefixes": ["lightningcss"], "versions": ["1.33.0"] },
+        "distributed": false,
+        "usage": "vite/vitest 的 CSS 转换器，仅测试与构建期使用；MPL-2.0 为文件级 copyleft，不会传染本仓库以 AGPL-3.0 发布的源码",
+        "introducedBy": [
+          "devDependency vitest@5.0.5",
+          "vite@8.3.4",
+          "lightningcss@1.33.0 + 平台二进制 lightningcss-<platform>@1.33.0"
+        ],
+        "links": [
+          "https://www.mozilla.org/en-US/MPL/2.0/",
+          "https://www.npmjs.com/package/lightningcss/v/1.33.0",
+          "https://github.com/parcel-bundler/lightningcss"
+        ],
+        "reason": "MPL-2.0 属于 issue 明确要求「不得自行判定」的许可族。当前仅存在于 devDependency 闭包，不随产品分发；是否长期接受由架构师裁定。",
+        "requestedReviewer": "架构师",
+        "raisedIn": "ZLQ-159"
+      }
+    ]
+  },
+  "platformBinaryFamilies": {
+    "note": "只用于 pnpm 自锁文档（pnpm-lock.yaml 第一个 YAML 文档）里的条目：它们不经过 node_modules，无法用「已安装兄弟包」推断许可证。每条都必须带可核对的证据链接，缺证据不得添加。其余平台变体（@esbuild/*、@rolldown/binding-*、@typescript/typescript-*、lightningcss-*）由解析器的同族兄弟推断处理，不在此登记。",
+    "entries": [
+      {
+        "id": "pnpm-self-lockfile",
+        "license": "MIT",
+        "names": ["pnpm"],
+        "prefixes": ["@pnpm/exe."],
+        "versions": ["12.11.2"],
+        "homepage": "https://pnpm.io/",
+        "evidence": [
+          "https://registry.npmjs.org/pnpm/12.11.2",
+          "https://registry.npmjs.org/@pnpm%2Fexe.darwin-arm64/12.11.2",
+          "https://github.com/pnpm/pnpm/blob/main/LICENSE"
+        ],
+        "auditedIn": "ZLQ-159"
+      }
+    ]
+  },
+  "ownPackages": {
+    "note": "本仓库工作区包以 AGPL-3.0-only 发布，不进入第三方许可证门禁；扫描器据此排除，避免把自己的许可证当成待裁定项。",
+    "names": [
+      "littleq",
+      "@littleq/web",
+      "@littleq/api",
+      "@littleq/worker",
+      "@littleq/runtime",
+      "@littleq/domain",
+      "@littleq/infra",
+      "@littleq/work-contract",
+      "@littleq/design-system"
+    ],
+    "license": "AGPL-3.0-only"
+  },
+  "scanTargets": {
+    "note": "ZLQ-153 §10.3 要求扫描三处：源码依赖、最终 web bundle、Docker 镜像。本任务接通前两项；镜像扫描留下接口与显式 TODO，由 ZLQ-157 形态 A（Docker 编排）交付后补齐。",
+    "sourcePackages": { "enabled": true, "tool": "tools/license/scan.mjs" },
+    "webBundle": { "enabled": true, "tool": "tools/license/bundle-scan.mjs" },
+    "dockerImage": {
+      "enabled": false,
+      "tool": "tools/license/image-scan.mjs",
+      "blockedBy": "ZLQ-157",
+      "todo": "形态 A（Docker Compose）落地后：以 cdxgen/trivy 扫描镜像 → 产出 CycloneDX SBOM → 复用本策略判定 → 在 CI 中开启 image 作业并移除 enabled:false。"
+    }
+  }
+}

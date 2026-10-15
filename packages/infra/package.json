@@ -1,0 +1,30 @@
+{
+  "name": "@littleq/infra",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "LittleQ 基础设施层骨架（ZLQ-153 §1.3 / §5）：适配器端口实现与环境变量加载校验，不含业务分支。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./env": {
+      "types": "./dist/env.d.ts",
+      "default": "./dist/env.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@littleq/domain": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

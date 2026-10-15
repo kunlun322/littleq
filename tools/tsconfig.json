@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // tools/ 下全是 .mjs 构建与门禁脚本（纯 JavaScript，不是产品代码）。
+  // checkJs 在 strict 下会给它们报约 200 条诊断，其中约 150 条是 implicit-any 噪音：
+  // 参数类型标注对「一个只被 CI 调用、且已有可执行控制用例的脚本」没有收益。
+  // 因此这里只做解析级检查——allowJs 让 tsc 仍然逐个 parse 这些文件（语法错误、
+  // import 路径写错都会被抓到），行为正确性交给控制用例证明：
+  //   tools/license/control.mjs        61 条断言，覆盖 ok / review / violation 三种退出码
+  //   tools/check-dependency-graph.mjs --expect-failures 7   故意植入的 7 处违规必须全部命中
+  // 产品代码（apps/* packages/* 的 .ts）与 *.config.ts 仍然是全严格类型检查。
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "types": ["node"]
+  },
+  "include": ["**/*.mjs"],
+  "exclude": ["__fixtures__"]
+}

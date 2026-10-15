@@ -1,0 +1,22 @@
+# 生成物
+artifacts/
+**/dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+pnpm-lock.yaml
+THIRD_PARTY_LICENSES
+
+# 治理文件：由 ZLQ-154 交付，本任务不得重写，故也不参与格式化。
+LICENSE
+NOTICE
+README.md
+CONTRIBUTING.md
+
+# 依赖
+node_modules/
+
+# 测试夹具：它们的**字节本身就是被测输入**（故意违规的 import、故意禁止的 license 字段、
+# 故意缺必填项的 .env）。让 `pnpm format` 去「修好」一份故意写坏的夹具，等于悄悄删掉对照用例。
+tools/__fixtures__/

@@ -1,0 +1,22 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# 刻意不执行依赖的安装脚本（收敛供应链攻击面）。pnpm 12 用 allowBuilds 表达该决定：
+# 值为 false 即显式拒绝其生命周期脚本；未显式表态会让 install 以
+# ERR_PNPM_IGNORED_BUILDS 失败，因此这里必须逐条列出。
+# - esbuild：平台二进制来自 @esbuild/<platform> 可选依赖，postinstall 对 JS API 无必要。
+# - playwright：浏览器二进制由 `pnpm exec playwright install` 显式安装，不靠 postinstall
+#   偷偷下载约 100 MiB。CI 的 e2e-smoke 作业显式装 chromium（并按锁文件缓存），
+#   见 .github/workflows/ci.yml。
+allowBuilds:
+  esbuild: false
+  playwright: false
+
+# pnpm 12 在每次 install 时自动维护该清单（把近期发布的包排除在 minimumReleaseAge
+# 供应链接口之外）。仓库未启用 minimumReleaseAge，故此清单当前不产生任何放宽效果；
+# 提交它是为了让工作树在 install 之后保持干净、且各机器结果一致。
+minimumReleaseAgeExclude:
+  - '@vitest/mocker@5.0.5'
+  - '@vitest/spy@5.0.5'
+  - vitest@5.0.5

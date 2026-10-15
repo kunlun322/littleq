@@ -1,0 +1,127 @@
+# 质量基座流水线（ZLQ-159 / ZLQ-153 §14 Stage 1-1）。
+#
+# 顺序按 issue 第 3 条：install → typecheck → lint → 依赖图门禁 → build → test。
+# 许可证与 SBOM 门禁是独立的 license-check 工作流（它已在默认分支注册为必需检查，
+# 保留原工作流名以免破坏分支保护规则的状态上下文名）。
+#
+# 三条不放宽的约束：
+#   1. `--frozen-lockfile`：CI 永不重新解析依赖。锁文件与 package.json 不一致就失败，
+#      而不是悄悄生成一份新锁文件——那会让「本地绿、CI 绿」指向两个不同的依赖树。
+#   2. 依赖图门禁必须连**对照用例**一起跑（dep-graph:control）。只跑 dep-graph 得到
+#      「0 违规」证明不了门禁有效：一个永远返回 0 的检查在 CI 里同样是绿的。
+#   3. permissions 收敛到 contents: read。这条流水线不需要写权限。
+#
+# 刻意**不做**的事：不校验 install 之后工作树是否干净。pnpm 12 会在每次 install 时
+# 自动维护 pnpm-workspace.yaml 的 minimumReleaseAgeExclude（按当前日期滚动），
+# 加一道 `git diff --exit-code` 只会得到一个随时间变红的假门禁。
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: 构建 / 类型 / lint / 依赖图 / 测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm 必须在 setup-node 之前：后者的 `cache: pnpm` 需要调用 `pnpm store path`。
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.11.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖（锁文件冻结）
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      - name: Lint（含由 config/dependency-graph.json 生成的边界规则）
+        run: pnpm lint
+
+      # 格式配置只有被强制才算存在：否则下一个 PR 会把重排和功能改动混在一份 diff 里。
+      # .prettierignore 已排除治理文件（LICENSE/NOTICE/README/CONTRIBUTING）、生成物
+      # 与测试夹具，所以这一步不会去动本任务无权重写的文件。
+      - name: 格式检查
+        run: pnpm format:check
+
+      - name: 依赖图门禁
+        run: pnpm dep-graph
+
+      - name: 依赖图门禁对照用例（故意植入的 7 处违规必须全部命中）
+        run: pnpm dep-graph:control
+
+      - name: 构建
+        run: pnpm build
+
+      # 产物落在 artifacts/（已 gitignore）。这里生成它是为了把 web.js 交给
+      # 下面的 e2e-smoke 作业复用同一份构建配置；单元/工具测试自己会按需重建，
+      # 不依赖这一步的执行顺序。
+      - name: 打包（保留 /*! @license */ 法务注释，§10.3）
+        run: pnpm bundles
+
+      - name: 测试
+        run: pnpm test
+
+  e2e-smoke:
+    name: e2e smoke（真实浏览器加载构建产物）
+    runs-on: ubuntu-latest
+    # 依赖 quality 而不是并行跑：产物要先构建出来，而且没必要在类型都对不上的
+    # 提交上花两分钟下载浏览器。
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.11.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖（锁文件冻结）
+        run: pnpm install --frozen-lockfile
+
+      # 浏览器二进制按锁文件做键缓存：命中时 install 是空操作，未命中时下载约 100 MiB。
+      # 把它与 quality 分成两个作业，正是为了让 CDN 抖动不至于把整条质量信号染红。
+      - name: 缓存 Playwright 浏览器
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: 安装 Playwright 浏览器
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: 打包（e2e 加载的就是这份产物）
+        run: pnpm bundles
+
+      - name: e2e smoke
+        run: pnpm test:e2e:smoke
+
+      - name: 上传失败现场
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,0 +1,93 @@
+lockfileVersion: '9.0'
+
+# 控制用例 A：全部合规（期望退出码 0）。
+# 刻意覆盖 lockfile.mjs / license-resolve.mjs 的每一条解析分支，
+# 这样「通过」不是因为夹具太简单、根本没走到那些代码：
+#   - importer.dependencies / devDependencies 两种字段位置（prod 与 dev 判定）
+#   - version: link:… 的 workspace 链接（必须被跳过，不进第三方闭包）
+#   - npm alias：依赖名与 packages 键不同名（resolvePackageKey 的 packages.has 分支）
+#   - snapshots 键带 peer 后缀（snapshotsByBase 聚合后遍历）
+#   - optionalDependencies 的平台专属二进制（同族推断分支）
+# 所有 integrity 都是显式假值：夹具不参与安装，也不该看起来像真包。
+# 包名刻意避开真实包与彼此的前缀，同族推断只在 fakebuild-* 这一族内发生。
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+      '@lqfixture/workspace-sibling':
+        specifier: workspace:*
+        version: link:packages/sibling
+    devDependencies:
+      '@lqfixture/scoped':
+        specifier: 1.0.0
+        version: 1.0.0
+      aliashost:
+        specifier: npm:aliasts@6.0.2
+        version: aliasts@6.0.2
+      fakebuild:
+        specifier: 1.0.0
+        version: 1.0.0
+      zerobsdfixture:
+        specifier: 1.0.0
+        version: 1.0.0
+
+packages:
+
+  '@lqfixture/scoped@1.0.0':
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000000}
+    engines: {node: '>=18'}
+
+  aliasts@6.0.2:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000001}
+    engines: {node: '>=18'}
+
+  fakebuild-darwin-arm64@1.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000002}
+    cpu: [arm64]
+    os: [darwin]
+
+  fakebuild-linux-x64@1.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000003}
+    cpu: [x64]
+    os: [linux]
+
+  fakebuild@1.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000004}
+    engines: {node: '>=18'}
+
+  zerobsdfixture@1.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000005}
+
+  zod@4.6.7:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000006}
+
+snapshots:
+
+  '@lqfixture/scoped@1.0.0(zod@4.6.7)':
+    dependencies:
+      zod: 4.6.7
+
+  aliasts@6.0.2: {}
+
+  fakebuild-darwin-arm64@1.0.0:
+    optional: true
+
+  fakebuild-linux-x64@1.0.0:
+    optional: true
+
+  fakebuild@1.0.0:
+    optionalDependencies:
+      fakebuild-darwin-arm64: 1.0.0
+      fakebuild-linux-x64: 1.0.0
+
+  zerobsdfixture@1.0.0: {}
+
+  zod@4.6.7: {}

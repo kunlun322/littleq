@@ -1,0 +1,61 @@
+lockfileVersion: '9.0'
+
+# 控制用例 B：命中 reviewRequired（期望退出码 2 —— 需人工裁定，不是一律判死）。
+#
+# 这里同时放「已登记待裁定」与「未登记待裁定」两类，用来把 issue 要求的
+# 「既不静默通过，也不按禁止项一律判死」拆成可断言的两半：
+#   - minimatch@10.2.6（BlueOak-1.0.0）已在 config/license-policy.json 的
+#     adjudications.entries 登记为 pending-architect → 允许通过（退出码不因它变成 2）
+#   - copyleftfixture / lgplfixture 未登记 → 退出码 2，并在报告与
+#     artifacts/license-adjudication-required.txt 里留痕
+#   - zod（MIT）作为对照，证明扫描器不是「见 reviewRequired 就全判死」
+#
+# 使用的是仓库线上那份真策略（control.mjs 以相对路径传入），不是夹具自带的副本：
+# 否则「夹具带一份能抓住夹具的策略」就成了自证，证明不了门禁有效。
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      copyleftfixture:
+        specifier: 2.0.0
+        version: 2.0.0
+      lgplfixture:
+        specifier: 1.1.0
+        version: 1.1.0
+      minimatch:
+        specifier: 10.2.6
+        version: 10.2.6
+
+packages:
+
+  copyleftfixture@2.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000010}
+
+  lgplfixture@1.1.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000011}
+
+  minimatch@10.2.6:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000012}
+    engines: {node: '>=18'}
+
+  zod@4.6.7:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000013}
+
+snapshots:
+
+  copyleftfixture@2.0.0: {}
+
+  lgplfixture@1.1.0: {}
+
+  minimatch@10.2.6: {}
+
+  zod@4.6.7: {}

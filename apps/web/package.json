@@ -1,0 +1,26 @@
+{
+  "name": "@littleq/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "LittleQ 主站 Web 骨架（ZLQ-153 §1.3）：SSR 页面与作品展示入口，不持有 AI 凭证。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@littleq/design-system": "workspace:*",
+    "@littleq/work-contract": "workspace:*"
+  }
+}

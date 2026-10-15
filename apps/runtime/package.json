@@ -1,0 +1,22 @@
+{
+  "name": "@littleq/runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "LittleQ 作品运行时骨架（ZLQ-153 §1.3）：学生作品的隔离托管与执行边界，不触达主站凭证。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

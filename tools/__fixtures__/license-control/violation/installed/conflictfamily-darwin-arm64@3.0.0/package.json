@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "name": "conflictfamily-darwin-arm64",
+  "version": "3.0.0",
+  "license": "MIT",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ]
+}

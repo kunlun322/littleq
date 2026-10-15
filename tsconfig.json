@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    { "path": "./packages/domain" },
+    { "path": "./packages/work-contract" },
+    { "path": "./packages/design-system" },
+    { "path": "./packages/infra" },
+    { "path": "./apps/api" },
+    { "path": "./apps/worker" },
+    { "path": "./apps/runtime" },
+    { "path": "./apps/web" }
+  ]
+}

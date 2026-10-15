@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "name": "conflictfamily-linux-x64",
+  "version": "3.0.0",
+  "license": "ISC",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}

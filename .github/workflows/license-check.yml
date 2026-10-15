@@ -1,11 +1,29 @@
 # Dependency-license gate — PRD V11 / F9.2 / AGPL-3.0 obligations.
 #
-# Minimal skeleton on purpose: no build, no tests — the tech stack is not
-# chosen yet (see the parent architecture-design task). The gate is
-# fail-closed: as soon as any dependency manifest lands in the repo while no
-# license checker is configured, this workflow fails, so dependencies can
-# never arrive without their AGPL-compatibility check. Tool candidates per
-# stack are listed in CONTRIBUTING.md.
+# 这一份工作流在 ZLQ-159 之前是**纯 fail-closed 占位**：仓库里没有任何依赖清单，
+# 所以它 trivially 通过；一旦出现任何清单而检查器未配置，它立即失败——为的就是不让
+# 依赖在没有 AGPL 兼容性检查的情况下溜进仓库。
+#
+# 现在检查器已经配好了（tools/license/*），所以占位失败被替换成真实门禁。
+# **fail-closed 的性质原样保留，只是收窄到「本仓库还没有检查器的生态」**：
+# Node/pnpm 清单交给下面的真实扫描；Python / Go / Rust / Java / Flutter 等清单一经出现
+# 仍然直接失败，直到对应生态的检查器被配置进来。换句话说，这份工作流永远不会因为
+# 「多了一种清单」而变绿。
+#
+# 工作流名保持 `license-check` 不变：它已在默认分支注册为 active 检查，
+# 改名会让分支保护里的必需状态上下文名失配。
+#
+# 判定分档（详见 config/license-policy.json 与 tools/license/scan.mjs）：
+#   退出码 0 —— 全部命中白名单，或命中 reviewRequired 但已在 adjudications 登记为
+#               pending-architect（此时不静默放行：清单会打到 stdout、Step Summary、
+#               artifacts/license-adjudication-required.txt 与 THIRD_PARTY_LICENSES）
+#   退出码 1 —— 命中禁止项，或出现未知许可证
+#   退出码 2 —— 命中 reviewRequired 却未登记裁定，或 lockfile 里有闭包走不到的孤儿条目
+#   退出码 3 —— 镜像扫描被 --require-enabled 要求启用而策略仍登记为未启用
+#   退出码 4 —— 镜像 SBOM 提取工具（cdxgen/trivy）缺失
+#
+# GPL / LGPL / MPL 一律不自动判定：它们既不在 allowed 也不在 forbidden，
+# 命中即进入待架构师裁定清单。CI 标记为「需人工裁决」，既不静默放行也不直接判死。
 name: license-check
 
 on:
@@ -17,15 +35,22 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: license-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   dependency-license-gate:
+    name: 依赖许可证 / SBOM / THIRD_PARTY_LICENSES
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Detect dependency manifests
         id: manifests
+        shell: bash
         run: |
+          set -euo pipefail
           found=$(find . \
             -type d \( -name node_modules -o -name .git -o -name dist -o -name build \) -prune -o \
             -type f \( \
@@ -36,19 +61,108 @@ jobs:
               -o -name 'pubspec.yaml' -o -name 'pom.xml' \
               -o -name 'build.gradle' -o -name 'build.gradle.kts' \
             \) -print)
-          if [ -n "$found" ]; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "Dependency manifests detected:"
-            echo "$found"
+
+          node_files=''
+          foreign_files=''
+          node_count=0
+          foreign_count=0
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            case "${file##*/}" in
+              package.json | package-lock.json | pnpm-lock.yaml | yarn.lock)
+                node_files="${node_files}${file}"$'\n'
+                node_count=$((node_count + 1))
+                ;;
+              *)
+                foreign_files="${foreign_files}${file}"$'\n'
+                foreign_count=$((foreign_count + 1))
+                ;;
+            esac
+          done <<< "$found"
+
+          if [ "$foreign_count" -gt 0 ]; then
+            echo "foreign=true" >> "$GITHUB_OUTPUT"
+            echo "本仓库尚无检查器的生态清单 ${foreign_count} 个："
+            printf '%s' "$foreign_files"
           else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No dependency manifests yet — license gate passes trivially."
+            echo "foreign=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fail closed until a license checker is configured
-        if: steps.manifests.outputs.found == 'true'
+          if [ "$node_count" -gt 0 ]; then
+            echo "node=true" >> "$GITHUB_OUTPUT"
+            echo "Node/pnpm 清单 ${node_count} 个，交由下面的真实门禁扫描。"
+          else
+            echo "node=false" >> "$GITHUB_OUTPUT"
+            echo "No Node/pnpm manifests — license gate passes trivially."
+          fi
+
+      - name: Fail closed for ecosystems without a configured checker
+        if: steps.manifests.outputs.foreign == 'true'
         run: |
-          echo "::error::Dependency manifests exist but no license checker is configured yet."
-          echo "Configure the stack-appropriate checker (candidates: CONTRIBUTING.md)"
-          echo "with the AGPL-3.0 compatibility allowlist in the same PR that introduces dependencies."
+          echo "::error::检测到非 Node 生态的依赖清单，但仓库尚未为该生态配置许可证检查器。"
+          echo "本工作流是 fail-closed 的：请先为该生态配置检查器（候选见 CONTRIBUTING.md），"
+          echo "并把 AGPL-3.0 兼容性白名单接进来，再引入这些依赖。"
           exit 1
+
+      - uses: pnpm/action-setup@v4
+        if: steps.manifests.outputs.node == 'true'
+        with:
+          version: 12.11.2
+
+      - uses: actions/setup-node@v4
+        if: steps.manifests.outputs.node == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖（锁文件冻结）
+        if: steps.manifests.outputs.node == 'true'
+        run: pnpm install --frozen-lockfile
+
+      # 必须真的装上依赖：许可证事实来自已安装包的 package.json（225 项里 142 项
+      # 走这条路径），只读锁文件的话绝大多数包的 license 字段是空的，
+      # 结果会把「已装但未声明」这一禁止项全部误判成未知。
+      - name: 源码依赖许可证扫描（pnpm-lock.yaml 闭包）
+        if: steps.manifests.outputs.node == 'true'
+        run: pnpm license:scan
+
+      - name: 打包 web bundle（保留 /*! @license */ 法务注释，§10.3）
+        if: steps.manifests.outputs.node == 'true'
+        run: pnpm bundles
+
+      - name: bundle 法务注释与归属扫描
+        if: steps.manifests.outputs.node == 'true'
+        run: pnpm license:bundle
+
+      - name: THIRD_PARTY_LICENSES 与锁文件一致性检查
+        if: steps.manifests.outputs.node == 'true'
+        run: pnpm license:third-party:check
+
+      - name: 生成 CycloneDX SBOM
+        if: steps.manifests.outputs.node == 'true'
+        run: pnpm sbom:generate
+
+      - name: 镜像许可证扫描（ZLQ-157 之前为已登记的延后项）
+        if: steps.manifests.outputs.node == 'true'
+        run: pnpm license:image
+
+      - name: 许可证门禁对照用例（三种退出码必须各自可复现）
+        if: steps.manifests.outputs.node == 'true'
+        run: pnpm license:control
+
+      - name: 上传许可证审计产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-audit
+          path: |
+            artifacts/license-report.json
+            artifacts/license-adjudication-required.txt
+            artifacts/sbom.cdx.json
+            artifacts/image-license-report.json
+            artifacts/bundles/bundle-license-report.json
+            artifacts/bundles/web.licenses.txt
+            artifacts/bundles/web.license-report.json
+            artifacts/bundles/web.options.json
+          if-no-files-found: ignore
+          retention-days: 30

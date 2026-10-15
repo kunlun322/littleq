@@ -1,0 +1,114 @@
+lockfileVersion: '9.0'
+
+# 控制用例 C：命中禁止项与无法解析项（期望退出码 1 —— 硬性失败，无豁免通道）。
+#
+# 六种失败形态各一条，逐条对应 issue 与 ZLQ-153 §10.3 的禁止清单：
+#   1. unlicensedfixture   UNLICENSED                       显式禁止许可证
+#   2. nolicensefield      已安装但 package.json 无 license 字段
+#                          → 解析器不降级、不猜测，扫描器表达为 NOASSERTION（禁止项）
+#   3. ssplfixture         SSPL-1.0                         显式禁止许可证
+#   4. proprietaryfixture  "SEE LICENSE IN proprietary-terms.txt"
+#                          → 命中禁止子串（see license in / proprietary），自由文本不放行
+#   5. absentfixture       lockfile 里有、四处都解析不到 → unknown（未知即不合规）
+#   6. conflictfamily-win32-x64  同族已安装兄弟给出互相矛盾的许可（MIT vs ISC）
+#                          → 解析器拒绝裁决，返回 unknown；这条是「推断不能变成猜测」的证明
+#   对照：zod（MIT）与 conflictfamily-darwin-arm64 / -linux-x64 本身合规，
+#   证明扫描器不是一律判死，而是逐条判定。
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      absentfixture:
+        specifier: 1.0.0
+        version: 1.0.0
+      conflictfamily:
+        specifier: 3.0.0
+        version: 3.0.0
+      nolicensefield:
+        specifier: 1.0.0
+        version: 1.0.0
+      proprietaryfixture:
+        specifier: 1.0.0
+        version: 1.0.0
+      ssplfixture:
+        specifier: 1.0.0
+        version: 1.0.0
+      unlicensedfixture:
+        specifier: 1.0.0
+        version: 1.0.0
+
+packages:
+
+  absentfixture@1.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000020}
+
+  conflictfamily-darwin-arm64@3.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000021}
+    cpu: [arm64]
+    os: [darwin]
+
+  conflictfamily-linux-x64@3.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000022}
+    cpu: [x64]
+    os: [linux]
+
+  conflictfamily-win32-x64@3.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000023}
+    cpu: [x64]
+    os: [win32]
+
+  conflictfamily@3.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000024}
+
+  nolicensefield@1.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000025}
+
+  proprietaryfixture@1.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000026}
+
+  ssplfixture@1.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000027}
+
+  unlicensedfixture@1.0.0:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000028}
+
+  zod@4.6.7:
+    resolution: {integrity: sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000029}
+
+snapshots:
+
+  absentfixture@1.0.0: {}
+
+  conflictfamily-darwin-arm64@3.0.0:
+    optional: true
+
+  conflictfamily-linux-x64@3.0.0:
+    optional: true
+
+  conflictfamily-win32-x64@3.0.0:
+    optional: true
+
+  conflictfamily@3.0.0:
+    optionalDependencies:
+      conflictfamily-darwin-arm64: 3.0.0
+      conflictfamily-linux-x64: 3.0.0
+      conflictfamily-win32-x64: 3.0.0
+
+  nolicensefield@1.0.0: {}
+
+  proprietaryfixture@1.0.0: {}
+
+  ssplfixture@1.0.0: {}
+
+  unlicensedfixture@1.0.0: {}
+
+  zod@4.6.7: {}
