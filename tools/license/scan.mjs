@@ -6,7 +6,14 @@
 //   1  命中禁止项（无许可声明 / UNLICENSED / SSPL / BUSL / GPL-2.0-only …）或许可证无法解析
 //   2  出现 reviewRequired（GPL/LGPL/MPL 等）但未登记裁定条目 —— 需架构师处理，不是硬违规
 //      --strict 下，已登记但 status=pending-architect 的条目也返回 2，供裁定完成后回归检查
+//      已 approved 但**批准前提失效**的条目同样返回 2：distributed:false 的裁定一旦覆盖到
+//      生产依赖（或分发产物，那半在 bundle-scan.mjs），就等于没有裁定，必须重新走一遍
 //      lockfile 里存在未进入审计闭包的孤立条目同样返回 2（有依赖没被审计到）
+//
+// 判定与 runner 平台无关：被 os/cpu/libc 约束的平台变体一律从提交进仓库的
+// config/license-registry-facts.json 解析（integrity 与 lockfile 交叉校验），不看本机装了什么。
+// 缺快照条目、integrity 对不上、或快照与已安装 manifest 说法矛盾，都归入「无法解析」→ 退出码 1。
+// 这条性质由 tools/test/license-platform-independence.test.mjs 锁住。
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import {
@@ -51,6 +58,7 @@ function describe(entry) {
   if (entry.origin === 'package-manager') parts.push('pnpm 自锁文档');
   if (entry.inferredFrom) parts.push(`同族推断自 ${entry.inferredFrom}`);
   if (entry.adjudication) parts.push(`裁定条目=${entry.adjudication.id}(${entry.adjudication.status})`);
+  if (entry.adjudication?.outOfScope) parts.push(`批准已失效：${entry.adjudication.outOfScope}`);
   if (entry.note) parts.push(entry.note);
   parts.push(entry.link);
   return parts.join(' | ');
@@ -73,6 +81,9 @@ function main() {
   const unregistered = review.filter((item) => !item.adjudication);
   const pending = review.filter((item) => item.adjudication?.status === ADJUDICATION_PENDING);
   const rejected = review.filter((item) => item.adjudication?.status === 'rejected');
+  // 已 approved 但批准前提（distributed:false）已不成立：裁定条目还在，却不能再当放行依据。
+  // 与「未登记」同档处理 —— 两者都意味着这条 reviewRequired 许可此刻没有有效裁定。
+  const staleApproval = review.filter((item) => item.adjudication?.outOfScope);
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -97,6 +108,9 @@ function main() {
         id: item.id,
         status: item.status,
         license: item.license,
+        // distributed:false 是批准的**前提**而不是备注：门禁按它判断批准是否还适用，
+        // 所以它必须出现在报告里，否则读报告的人看不出批准是有条件的。
+        distributed: item.distributed ?? null,
       })),
     },
     skippedTargets: [
@@ -116,7 +130,12 @@ function main() {
   const hardFail = forbidden.length + unknown.length + rejected.length > 0;
   // lockfile 里有、闭包走不到的条目 = 有依赖没被审计到。这不是许可证违规（不该判 1），
   // 但也不能只在报告里静静躺着：按「需人工确认」处理，与未登记待裁定同一档。
-  const softFail = unregistered.length > 0 || result.orphaned.length > 0 || (args.strict && pending.length > 0);
+  // staleApproval 同档：批准的前提没了，等于这条 reviewRequired 此刻无人裁定。
+  const softFail =
+    unregistered.length > 0 ||
+    staleApproval.length > 0 ||
+    result.orphaned.length > 0 ||
+    (args.strict && pending.length > 0);
   const exitCode = hardFail ? 1 : softFail ? 2 : 0;
 
   if (args.json) {
@@ -126,7 +145,12 @@ function main() {
     line('== 源码依赖许可证扫描 ==');
     line(`闭包总量：${summary.total}（项目 lockfile ${summary.byOrigin.project} + pnpm 自锁 ${summary.byOrigin['package-manager']}）`);
     line(`生产依赖 ${summary.prod} / dev 依赖 ${summary.dev}`);
-    line(`解析来源：已安装 manifest ${summary.bySource['installed-manifest'] ?? 0}，同族平台推断 ${summary.bySource['platform-sibling-inferred'] ?? 0}，审计策略条目 ${summary.bySource['audited-policy-entry'] ?? 0}`);
+    line(
+      `解析来源：已安装 manifest ${summary.bySource['installed-manifest'] ?? 0}，` +
+        `注册表事实快照 ${summary.bySource['registry-facts'] ?? 0}，` +
+        `同族平台推断 ${summary.bySource['platform-sibling-inferred'] ?? 0}，` +
+        `审计策略条目 ${summary.bySource['audited-policy-entry'] ?? 0}`,
+    );
     line(`判定：通过 ${summary.byVerdict[VERDICT_ALLOWED]}，待裁定 ${summary.byVerdict[VERDICT_REVIEW]}，禁止 ${summary.byVerdict[VERDICT_FORBIDDEN]}，无法解析 ${summary.byVerdict[VERDICT_UNKNOWN]}`);
     line('许可证分布：');
     for (const [license, count] of Object.entries(summary.byLicense)) line(`  ${license}: ${count}`);
@@ -147,6 +171,12 @@ function main() {
       line(`!! 待裁定但未登记 ${unregistered.length} 条 —— 需在 config/license-policy.json 的 adjudications.entries 增加条目并请架构师评审：`);
       for (const item of unregistered) line(`  - ${describe(item)}`);
     }
+    if (staleApproval.length > 0) {
+      line('');
+      line(`!! 批准前提已失效 ${staleApproval.length} 条 —— 裁定条目仍写着 approved，但它批准时声明的 distributed:false 已不成立，必须重新裁定：`);
+      for (const item of staleApproval) line(`  - ${describe(item)}`);
+      line('   处理：要么把依赖退回 devDependencies / 从产物里去掉，要么请架构师按「会分发」重新裁定并更新条目。');
+    }
     if (result.orphaned.length > 0) {
       line('');
       line(`!! lockfile 里有 ${result.orphaned.length} 条从任何 importer 都走不到的包（未进入审计闭包）：`);
@@ -160,18 +190,29 @@ function main() {
     }
     if (review.length > 0 && args.strict) {
       line('');
-      line(`--strict：${review.length} 条 reviewRequired 尚未全部 approved。`);
+      line(
+        `--strict：${review.length} 条 reviewRequired 没有有效批准` +
+          `（未登记 ${unregistered.length}、批准已失效 ${staleApproval.length}、等待裁定 ${pending.length}）。`,
+      );
     }
     line('');
     line(`>> Docker 镜像扫描未接通（blocked by ${report.skippedTargets[0].blockedBy}）：${report.skippedTargets[0].todo}`);
   }
 
   // 待裁定清单落到文件 + CI step summary，保证「不静默」这件事有三处留痕。
-  if (pending.length + unregistered.length > 0) {
+  // 三档标签不能压成两档：STALE 与 MISSING 的处置动作不同（一个是重裁已有条目，
+  // 一个是新建条目），混标会让读到清单的人去改错地方。
+  const label = (item) => {
+    if (!item.adjudication) return 'MISSING';
+    if (item.adjudication.outOfScope) return 'STALE  ';
+    return 'pending';
+  };
+  const needsHuman = [...unregistered, ...staleApproval, ...pending];
+  if (needsHuman.length > 0) {
     const listFile = join(dirname(outFile), 'license-adjudication-required.txt');
     const body = [
       '# 需架构师裁定的第三方许可证（由 tools/license/scan.mjs 生成）',
-      ...[...unregistered, ...pending].map((item) => `${item.adjudication ? 'pending  ' : 'MISSING'} ${describe(item)}`),
+      ...needsHuman.map((item) => `${label(item)} ${describe(item)}`),
       '',
     ].join('\n');
     writeFileSync(listFile, body, 'utf8');
@@ -183,10 +224,14 @@ function main() {
           '',
           '| 包 | 许可证 | 状态 | 链接 |',
           '| --- | --- | --- | --- |',
-          ...[...unregistered, ...pending].map(
-            (item) =>
-              `| \`${item.name}@${item.version}\` | ${item.expression} | ${item.adjudication ? item.adjudication.status : '**未登记**'} | ${item.link} |`,
-          ),
+          ...needsHuman.map((item) => {
+            const status = !item.adjudication
+              ? '**未登记**'
+              : item.adjudication.outOfScope
+                ? `**批准已失效**（${item.adjudication.outOfScope}）`
+                : item.adjudication.status;
+            return `| \`${item.name}@${item.version}\` | ${item.expression} | ${status} | ${item.link} |`;
+          }),
           '',
         ].join('\n'),
         'utf8',

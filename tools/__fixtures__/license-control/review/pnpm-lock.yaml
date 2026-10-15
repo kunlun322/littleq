@@ -2,10 +2,13 @@ lockfileVersion: '9.0'
 
 # 控制用例 B：命中 reviewRequired（期望退出码 2 —— 需人工裁定，不是一律判死）。
 #
-# 这里同时放「已登记待裁定」与「未登记待裁定」两类，用来把 issue 要求的
+# 这里同时放「已批准」与「未登记待裁定」两类，用来把 issue 要求的
 # 「既不静默通过，也不按禁止项一律判死」拆成可断言的两半：
 #   - minimatch@10.2.6（BlueOak-1.0.0）已在 config/license-policy.json 的
-#     adjudications.entries 登记为 pending-architect → 允许通过（退出码不因它变成 2）
+#     adjudications.entries 登记为 approved + distributed:false（ZLQ-162 裁定），
+#     而本夹具把它放在 devDependencies → 批准前提成立，判定抬到 allowed，
+#     退出码不因它变成 2。pending-architect 状态由 control.mjs 的派生策略覆盖，
+#     批准前提失效由 scope/ 夹具覆盖
 #   - copyleftfixture / lgplfixture 未登记 → 退出码 2，并在报告与
 #     artifacts/license-adjudication-required.txt 里留痕
 #   - zod（MIT）作为对照，证明扫描器不是「见 reviewRequired 就全判死」

@@ -12,14 +12,16 @@
 //     scan.mjs 完全相同的策略与退出码契约。这半是完整实现且有夹具覆盖的，ZLQ-157 接通
 //     提取半之后无需再改判定逻辑。
 //
-// 退出码：0 全部合规或已登记；1 命中禁止/未知；2 命中 reviewRequired 但未登记裁定；
+// 退出码：0 全部合规或已登记；1 命中禁止/未知；2 命中 reviewRequired 但未登记裁定，
+//         或已 approved 的裁定**前提失效**（distributed:false 的批准不能覆盖镜像里的组件
+//         —— 镜像本身就是分发产物，见 tools/lib/collect.mjs 的 approvalOutOfScope()）；
 //         3 policy 声明 enabled=false 却传了 --require-enabled；4 提取工具不可用。
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { evaluateExpression } from '../lib/spdx.mjs';
-import { ADJUDICATION_APPROVED, ADJUDICATION_REJECTED, findAdjudication, npmLink } from '../lib/collect.mjs';
+import { ADJUDICATION_APPROVED, ADJUDICATION_REJECTED, approvalOutOfScope, findAdjudication, npmLink } from '../lib/collect.mjs';
 import { VERDICT_ALLOWED, VERDICT_FORBIDDEN, VERDICT_REVIEW, VERDICT_UNKNOWN } from '../lib/spdx.mjs';
 
 const EXTRACTORS = [
@@ -124,8 +126,12 @@ function evaluateComponents(bom, policy) {
     );
     const entry = { name: component.name, version: component.version };
     const adjudication = findAdjudication(entry, policy);
+    // 镜像**就是**分发产物，所以 distributed:false 的批准在这里一律前提失效。
+    // 这正是那条裁定写明「不随作品或镜像分发」时要防的事：批准不能跟着依赖搬进镜像。
+    const outOfScope = approvalOutOfScope(adjudication, { inDistributionArtifact: true });
     let verdict = worst.verdict;
-    if (adjudication?.status === ADJUDICATION_APPROVED && verdict === VERDICT_REVIEW) verdict = VERDICT_ALLOWED;
+    if (adjudication?.status === ADJUDICATION_APPROVED && verdict === VERDICT_REVIEW && !outOfScope)
+      verdict = VERDICT_ALLOWED;
     if (adjudication?.status === ADJUDICATION_REJECTED) verdict = VERDICT_FORBIDDEN;
 
     return {
@@ -135,13 +141,16 @@ function evaluateComponents(bom, policy) {
       ids: [...new Set(evaluations.flatMap((item) => item.ids))],
       verdict,
       own: false,
-      adjudication: adjudication ? { id: adjudication.id, status: adjudication.status } : null,
+      adjudication: adjudication
+        ? { id: adjudication.id, status: adjudication.status, distributed: adjudication.distributed ?? null, outOfScope }
+        : null,
       link: npmLink(component.name, component.version),
     };
   });
 
   const needsAdjudication = rows.filter(
-    (row) => row.verdict === VERDICT_REVIEW && row.adjudication?.status !== ADJUDICATION_APPROVED,
+    // approved 但前提已失效 = 此刻没有有效裁定，与未登记同档。
+    (row) => row.verdict === VERDICT_REVIEW && !(row.adjudication?.status === ADJUDICATION_APPROVED && !row.adjudication?.outOfScope),
   );
   return {
     rows,
@@ -156,6 +165,9 @@ function evaluateComponents(bom, policy) {
         unknown: rows.filter((r) => r.verdict === VERDICT_UNKNOWN).length,
       },
       unregistered: needsAdjudication.filter((r) => !r.adjudication).map((r) => `${r.name}@${r.version}`),
+      approvalsOutOfScope: needsAdjudication
+        .filter((r) => r.adjudication?.outOfScope)
+        .map((r) => ({ package: `${r.name}@${r.version}`, adjudication: r.adjudication.id, reason: r.adjudication.outOfScope })),
       needsAdjudication: needsAdjudication.map((r) => `${r.name}@${r.version}`),
     },
   };
@@ -251,7 +263,7 @@ function main() {
 
   const exitCode = summary.byVerdict.forbidden + summary.byVerdict.unknown > 0
     ? 1
-    : summary.unregistered.length > 0
+    : summary.unregistered.length + summary.approvalsOutOfScope.length > 0
       ? 2
       : 0;
 
@@ -272,6 +284,11 @@ function main() {
   if (summary.unregistered.length) {
     lines.push(`!! ${summary.unregistered.length} 项命中 reviewRequired 但未在 adjudications 登记：${summary.unregistered.join(', ')}`);
     lines.push('   处理：在 config/license-policy.json 的 adjudications.entries 增加登记并提请架构师裁定，不得直接放宽 allowed。');
+  }
+  if (summary.approvalsOutOfScope.length) {
+    lines.push(`!! ${summary.approvalsOutOfScope.length} 项的批准前提已失效（裁定条目仍写着 approved，但 distributed:false 不再成立）：`);
+    for (const item of summary.approvalsOutOfScope) lines.push(`   - ${item.package}（裁定 ${item.adjudication}）：${item.reason}`);
+    lines.push('   处理：镜像就是分发产物。要么把它从镜像里去掉，要么请架构师按「会分发」重新裁定，不得沿用原批准。');
   }
   for (const row of rows.filter((item) => item.verdict === VERDICT_FORBIDDEN || item.verdict === VERDICT_UNKNOWN)) {
     lines.push(`!! ${row.name}@${row.version} → ${row.verdict}（${row.expressions.join(' | ') || '无许可证声明'}）${row.link}`);

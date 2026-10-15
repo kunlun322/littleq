@@ -4,6 +4,16 @@
 # 许可证与 SBOM 门禁是独立的 license-check 工作流（它已在默认分支注册为必需检查，
 # 保留原工作流名以免破坏分支保护规则的状态上下文名）。
 #
+# 这份顺序**不再只是注释里的约定**：tools/test/ci-workflow.test.mjs 会把每个作业里实际执行的
+# pnpm 脚本按出现顺序抽出来，断言它们是 `pnpm verify` 链路的严格递增子序列。任何一侧单独调序
+# 都会让 `pnpm test` 变红——ZLQ-160 之前，本地 verify 把 build 放在第一位而 CI 把 typecheck
+# 放在第一位，两边都"绿着"，直到首次推送才在干净检出上暴露 9 处 TS2307。
+#
+# typecheck 自身在干净检出下是自足的：`pnpm typecheck` = `tsc -b tsconfig.json`（solution
+# 构建，产出 packages/*/dist/index.d.ts）+ 两份 noEmit 配置的类型检查。packages/*/package.json
+# 的 types 指向 ./dist/index.d.ts，所以类型检查依赖那次构建；把它并进 typecheck 而不是靠
+# CI 步骤排序来保证，本地与 CI 就不会再各说各话。后面的「构建」步骤因此是增量空操作。
+#
 # 三条不放宽的约束：
 #   1. `--frozen-lockfile`：CI 永不重新解析依赖。锁文件与 package.json 不一致就失败，
 #      而不是悄悄生成一份新锁文件——那会让「本地绿、CI 绿」指向两个不同的依赖树。
@@ -67,6 +77,9 @@ jobs:
       - name: 依赖图门禁对照用例（故意植入的 7 处违规必须全部命中）
         run: pnpm dep-graph:control
 
+      # typecheck 已经跑过 `tsc -b`，这一步是增量空操作。保留它有两个理由：产物要落在
+      # 工作树里供后续步骤与本地复现使用，而且 `build` 是 verify 链路上的一道独立门禁，
+      # 从 CI 里删掉它等于让「构建能过」这件事不再被强制。
       - name: 构建
         run: pnpm build
 

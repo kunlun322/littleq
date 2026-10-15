@@ -7,8 +7,13 @@ lockfileVersion: '9.0'
 #   - version: link:… 的 workspace 链接（必须被跳过，不进第三方闭包）
 #   - npm alias：依赖名与 packages 键不同名（resolvePackageKey 的 packages.has 分支）
 #   - snapshots 键带 peer 后缀（snapshotsByBase 聚合后遍历）
-#   - optionalDependencies 的平台专属二进制（同族推断分支）
+#   - optionalDependencies 的平台专属二进制：两个变体都从夹具自己的
+#     config/license-registry-facts.json 解析，本机装没装到都一样（ZLQ-162 缺陷 2 的修法：
+#     判定不得依赖 runner 上恰好装了什么）。同族推断分支由 violation/ 的 conflictfamily
+#     覆盖 —— 那里两个兄弟许可互相矛盾，必须拒绝裁决。
 # 所有 integrity 都是显式假值：夹具不参与安装，也不该看起来像真包。
+# fakebuild-*-1.0.0 的 integrity 必须与夹具快照里对应那一条逐字节相同，
+# 否则 resolveFromFacts 判 unknown、退出码变 1（这是交叉校验在起作用，不是夹具坏了）。
 # 包名刻意避开真实包与彼此的前缀，同族推断只在 fakebuild-* 这一族内发生。
 
 settings:

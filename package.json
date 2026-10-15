@@ -12,7 +12,7 @@
   "packageManager": "pnpm@12.11.2",
   "scripts": {
     "build": "tsc -b tsconfig.json",
-    "typecheck": "tsc -p tsconfig.test.json && tsc -p tools/tsconfig.json",
+    "typecheck": "tsc -b tsconfig.json && tsc -p tsconfig.test.json && tsc -p tools/tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -21,6 +21,7 @@
     "dep-graph:control": "node tools/check-dependency-graph.mjs --root tools/__fixtures__/dep-graph-violation --expect-failures 7",
     "license:scan": "node tools/license/scan.mjs",
     "license:scan:strict": "node tools/license/scan.mjs --strict",
+    "license:registry-facts": "node tools/license/registry-facts.mjs",
     "license:bundle": "node tools/license/bundle-scan.mjs",
     "license:third-party": "node tools/license/third-party.mjs",
     "license:third-party:check": "node tools/license/third-party.mjs --check",
@@ -31,7 +32,7 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:e2e:smoke": "playwright test",
-    "verify": "pnpm build && pnpm typecheck && pnpm lint && pnpm format:check && pnpm dep-graph && pnpm dep-graph:control && pnpm bundles && pnpm license:scan && pnpm license:bundle && pnpm license:third-party:check && pnpm sbom:generate && pnpm license:image && pnpm license:control && pnpm test"
+    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm dep-graph && pnpm dep-graph:control && pnpm build && pnpm license:scan && pnpm bundles && pnpm license:bundle && pnpm license:third-party:check && pnpm sbom:generate && pnpm license:image && pnpm license:control && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",

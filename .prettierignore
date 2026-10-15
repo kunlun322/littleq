@@ -7,8 +7,16 @@ test-results/
 *.tsbuildinfo
 pnpm-lock.yaml
 THIRD_PARTY_LICENSES
+# 许可事实快照由 `pnpm license:registry-facts` 从 registry 生成并提交进仓库
+# （门禁要在离线的全新 checkout 上跑）。排除它不是因为格式化会改变语义——JSON 重排
+# 不影响解析结果——而是因为格式化后生成器的输出与仓库里的字节不再一致：下次重新生成
+# 就会带出一份纯排版的 diff，把真正的事实变化埋在里面。与 THIRD_PARTY_LICENSES 同处理。
+config/license-registry-facts.json
 
-# 治理文件：由 ZLQ-154 交付，本任务不得重写，故也不参与格式化。
+# 治理文件：内容由 ZLQ-154 交付（CONTRIBUTING.md 的许可证与工具链章节在 ZLQ-162 按裁定改写），
+# 排版是写作决定，不交给 format 脚本。排除它们的实际效果分两种：LICENSE / NOTICE 根本没有
+# 可用解析器，prettier --check 会直接报错而不是「通过」；两份 Markdown 唯一的差异是表格列宽
+# 对齐（prettier 会把单元格补空格）。留着这条，`pnpm format` 就不会把纯排版的改动混进治理文件的 diff。
 LICENSE
 NOTICE
 README.md

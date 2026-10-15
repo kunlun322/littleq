@@ -2,8 +2,12 @@
 // 生成 THIRD_PARTY_LICENSES（ZLQ-153 §10.2 / §10.3）。
 //
 // 文档分两段，边界用显式标记隔开：
-//   INVENTORY —— 完全由 pnpm-lock.yaml 推导，与运行平台无关，`--check` 只比对这一段，
-//                因此 CI 可以在 linux 上校验 mac 生成的文件而不产生假失败。
+//   INVENTORY —— 完全由 pnpm-lock.yaml + config/license-registry-facts.json 推导，与运行平台无关，
+//                `--check` 只比对这一段，因此 CI 可以在 linux 上校验 mac 生成的文件而不产生假失败。
+//                「与运行平台无关」在 ZLQ-162 之前只是注释里的说法而非事实：那一段含「许可证依据」列，
+//                而它由 licenseSource 渲染，同一批平台变体在本机是 installed-manifest、
+//                在 Linux runner 上是 platform-sibling-inferred —— mac 生成的文件拿到 CI 上校验必然不一致。
+//                现在平台变体一律走注册表事实快照，licenseSource 只由 (name, version) 决定，这句话才成立。
 //   TEXTS     —— 许可证全文从已安装包内的 LICENSE 文件收割，不手写、不转抄，避免转录错误。
 //                本机没安装的平台变体（如 @esbuild/aix-ppc64）与其已安装同族共用同一份全文。
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -83,13 +87,15 @@ function buildInventory(result) {
     const basis =
       item.licenseSource === 'installed-manifest'
         ? 'package.json'
-        : item.licenseSource === 'platform-sibling-inferred'
-          ? `同族推断：${item.inferredFrom}`
-          : item.licenseSource === 'audited-policy-entry'
-            ? `审计条目：${item.policyId}`
-            : item.licenseSource === 'own-package'
-              ? '本仓库自有包'
-              : '**无法解析**';
+        : item.licenseSource === 'registry-facts'
+          ? '注册表事实快照'
+          : item.licenseSource === 'platform-sibling-inferred'
+            ? `同族推断：${item.inferredFrom}`
+            : item.licenseSource === 'audited-policy-entry'
+              ? `审计条目：${item.policyId}`
+              : item.licenseSource === 'own-package'
+                ? '本仓库自有包'
+                : '**无法解析**';
     lines.push(`| \`${item.name}\` | ${item.version} | ${item.expression ?? '<none>'} | ${item.kind} | ${origin} | ${basis} |`);
   }
   lines.push('');

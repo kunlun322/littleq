@@ -44,6 +44,9 @@ function readDocument(doc, origin) {
       hasBin: value?.hasBin === true,
       cpu: value?.cpu ?? null,
       os: value?.os ?? null,
+      // libc 也是平台约束的一部分（glibc / musl 变体，如 @rolldown/binding-linux-x64-gnu）。
+      // 少了它，musl 变体会被误判成「任何平台都装」，从而按已安装 manifest 解析。
+      libc: value?.libc ?? null,
       integrity: value?.resolution?.integrity ?? null,
     });
   }

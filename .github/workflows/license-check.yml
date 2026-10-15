@@ -119,9 +119,17 @@ jobs:
         if: steps.manifests.outputs.node == 'true'
         run: pnpm install --frozen-lockfile
 
-      # 必须真的装上依赖：许可证事实来自已安装包的 package.json（225 项里 142 项
-      # 走这条路径），只读锁文件的话绝大多数包的 license 字段是空的，
+      # 必须真的装上依赖：225 项里 137 项的许可事实来自已安装包的 package.json，
+      # 只读锁文件的话绝大多数包的 license 字段是空的，
       # 结果会把「已装但未声明」这一禁止项全部误判成未知。
+      #
+      # 但**判定结果不依赖 runner 上恰好装了什么**：被 os/cpu/libc 约束的平台变体
+      # （73 项，fsevents / @esbuild/* / lightningcss-* …）一律从提交进仓库的
+      # config/license-registry-facts.json 解析，并用 integrity 与 lockfile 交叉校验。
+      # 剩下 15 项是带证据链接的人工审计条目（pnpm 自锁文档里的 pnpm / @pnpm/exe.*）。
+      # 这条性质由 tools/test/license-platform-independence.test.mjs 锁住
+      # —— 它在 macOS 上模拟出「Linux runner 没装 darwin-only 可选依赖」的条件，
+      # 断言判定与已安装时逐条一致（ZLQ-162 修的第二个缺陷）。
       - name: 源码依赖许可证扫描（pnpm-lock.yaml 闭包）
         if: steps.manifests.outputs.node == 'true'
         run: pnpm license:scan

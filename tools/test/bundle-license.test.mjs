@@ -8,7 +8,15 @@
 //   3. 断言对象取自 tools/esbuild-config.mjs —— 也就是 tools/build-bundles.mjs 用的那份配置，
 //      测试因此无法与生产配置漂移。
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { build } from 'esbuild';
@@ -23,6 +31,7 @@ import {
 const REPO_ROOT = join(import.meta.dirname, '..', '..');
 const FIXTURE_ENTRY = join(REPO_ROOT, 'tools', '__fixtures__', 'bundle-license', 'entry.ts');
 const BUNDLES_DIR = join(REPO_ROOT, 'artifacts', 'bundles');
+const BUNDLE_SCAN = join(REPO_ROOT, 'tools', 'license', 'bundle-scan.mjs');
 
 const workdir = mkdtempSync(join(tmpdir(), 'lq-bundle-license-'));
 afterAll(() => rmSync(workdir, { recursive: true, force: true }));
@@ -133,5 +142,134 @@ describe('真实 web bundle 与旁挂清单', () => {
     expect(text).toContain('MIT');
     expect(text).toContain('https://www.npmjs.com/package/zod/v/');
     expect(text).not.toContain(REPO_ROOT);
+  });
+});
+
+// ZLQ-162 治理裁定 3 的**产物侧**闸门：批准以 distributed:false 为前提，被打包进 bundle 就等于
+// 正在分发，前提当场失效（tools/lib/collect.mjs 的 approvalOutOfScope()）。
+//
+// 为什么用合成 metafile：真实 web bundle 今天只打进 zod，minimatch / lightningcss 都被
+// tree-shaking 挡在产物外，于是这半条规则在真实产物上是 0 进 0 出的空断言 —— 把规则删掉照样全绿。
+// 合成 metafile 只伪造「产物里有哪些输入文件」这一项；策略、lockfile 闭包、prod/dev 归类、
+// 包清单与许可证表达式全部取自线上仓库与 node_modules 里真实安装的包，走的也是真实的
+// bundle-scan.mjs CLI。而它恰恰是只有产物扫描能判的一半：源码扫描看得到 prod/dev，
+// 看不到产物里到底装了什么。
+//
+// 对照组不可省：空 packages 同样退出 0，所以对照组必须断言 zod **确实被识别出来**，
+// 否则「合成 metafile 格式没被认出来」也会伪装成通过。
+const SYNTHETIC_OPTIONS = {
+  legalComments: 'inline',
+  minify: true,
+  bundle: true,
+  format: 'esm',
+  bannerPresent: true,
+};
+
+function storeInput(name, relFile) {
+  const storeDir = join(REPO_ROOT, 'node_modules', '.pnpm');
+  const entry = readdirSync(storeDir).find(
+    (dir) =>
+      dir.startsWith(`${name}@`) && existsSync(join(storeDir, dir, 'node_modules', name, relFile)),
+  );
+  if (!entry) throw new Error(`夹具失效：node_modules/.pnpm 下找不到含 ${relFile} 的 ${name}`);
+  const root = join(storeDir, entry, 'node_modules', name);
+  return {
+    path: `node_modules/.pnpm/${entry}/node_modules/${name}/${relFile}`,
+    manifest: JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')),
+  };
+}
+
+function runBundleScan(name, inputs) {
+  const bundlesDir = join(workdir, `bundle-scan-${name}`);
+  mkdirSync(bundlesDir, { recursive: true });
+  const meta = {
+    inputs: Object.fromEntries(inputs.map((item) => [item.path, { bytesInOutput: 1 }])),
+    outputs: {},
+  };
+  writeFileSync(
+    join(bundlesDir, `${name}.meta.json`),
+    `${JSON.stringify(meta, null, 2)}\n`,
+    'utf8',
+  );
+  writeFileSync(
+    join(bundlesDir, `${name}.options.json`),
+    `${JSON.stringify(SYNTHETIC_OPTIONS, null, 2)}\n`,
+    'utf8',
+  );
+  // 正文只需带上 AGPL 横幅声明即可满足 bannerPresent；两个输入文件都没有 /*! 法务注释，
+  // 因此 stripped 为空是真结果，不是「没检查」。
+  writeFileSync(
+    join(bundlesDir, `${name}.js`),
+    `/*! LittleQ — SPDX-License-Identifier: AGPL-3.0-only */\n`,
+    'utf8',
+  );
+  const run = spawnSync(
+    process.execPath,
+    [BUNDLE_SCAN, '--repo-root', REPO_ROOT, '--bundles-dir', bundlesDir],
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  );
+  const report = JSON.parse(readFileSync(join(bundlesDir, 'bundle-license-report.json'), 'utf8'));
+  return {
+    exitCode: run.status,
+    stdout: run.stdout,
+    stderr: run.stderr,
+    bundle: report.bundles[0],
+    licensesTxt: readFileSync(join(bundlesDir, `${name}.licenses.txt`), 'utf8'),
+  };
+}
+
+describe('bundle 是分发产物：distributed:false 的批准在产物里前提失效', () => {
+  it('对照组：只打进 zod（MIT）时退出 0，且 zod 确实被识别、配置校验确实通过', () => {
+    const zod = storeInput('zod', 'index.js');
+    const { exitCode, stderr, bundle } = runBundleScan('allowed', [zod]);
+    expect(exitCode, stderr).toBe(0);
+    // 下面四条是「非空断言」的护栏：合成 metafile 没被认出来的话，它们会先失败。
+    expect(bundle.configProblems).toEqual([]);
+    expect(bundle.untracked).toEqual([]);
+    expect(bundle.legalComments.stripped).toEqual([]);
+    expect(bundle.packages).toHaveLength(1);
+    expect(bundle.packages[0]).toMatchObject({
+      name: 'zod',
+      version: zod.manifest.version,
+      expression: 'MIT',
+      verdict: 'allowed',
+      inClosure: true,
+    });
+  });
+
+  it('同一个 bundle 里换成 minimatch（BlueOak-1.0.0，线上批准 distributed:false）→ 退出 2 并点名', () => {
+    const minimatch = storeInput('minimatch', 'dist/commonjs/index.js');
+    const { exitCode, stdout, stderr, bundle, licensesTxt } = runBundleScan('distributed', [
+      minimatch,
+    ]);
+
+    // 必须是 2（待裁定档）而不是 1：退出 1 意味着合成夹具本身出了硬性失败，证明不了这条规则。
+    expect(exitCode, `${stdout}\n${stderr}`).toBe(2);
+    expect(bundle.configProblems).toEqual([]);
+    expect(bundle.untracked).toEqual([]);
+    expect(bundle.packages).toHaveLength(1);
+    expect(bundle.packages[0]).toMatchObject({
+      name: 'minimatch',
+      version: minimatch.manifest.version,
+      expression: 'BlueOak-1.0.0',
+      verdict: 'review-required',
+      inClosure: true,
+    });
+    // 源码闭包视角的 outOfScope 是 null —— minimatch 是 devDependency，在源码扫描里前提成立。
+    // 产物视角必须自己再判一次，这正是 bundle-scan 不能沿用 collect 结果的原因。
+    expect(bundle.packages[0].adjudication).toEqual({
+      id: 'minimatch-blueoak-1.0.0',
+      status: 'approved',
+      distributed: false,
+      outOfScope: null,
+    });
+
+    expect(stdout).toContain('bundle 内出现无有效裁定的 reviewRequired');
+    expect(stdout).toContain(`minimatch@${minimatch.manifest.version}`);
+    expect(stdout).toContain('已被打包进分发产物');
+    expect(stdout).toContain('必须重新裁定');
+    // 旁挂清单照旧生成：判红不等于不产出证据，§10.2 的 /licenses.txt 来源不能断。
+    expect(licensesTxt).toContain('Package: minimatch');
+    expect(licensesTxt).toContain('BlueOak-1.0.0');
   });
 });

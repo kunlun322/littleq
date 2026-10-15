@@ -11,9 +11,14 @@
 //      压缩后的产物中（配置本身也被机器校验，见 *.options.json）。
 //
 // 退出码与 scan.mjs 一致：0 通过；1 硬性失败；2 出现未登记的 reviewRequired。
+//
+// 「未登记」还包含**批准已失效**：config/license-policy.json 里 distributed:false 的
+// approved 条目（lightningcss MPL-2.0、minimatch BlueOak-1.0.0）之所以被放行，前提是
+// 它们不随产物分发。被打包进 bundle 就等于正在分发，前提不成立，批准即刻失效并退回
+// 待裁定。这条规则由 tools/lib/collect.mjs 的 approvalOutOfScope() 实现，是代码不是注释。
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { collect, ADJUDICATION_PENDING, VERDICT_FORBIDDEN, VERDICT_REVIEW, VERDICT_UNKNOWN } from '../lib/collect.mjs';
+import { approvalOutOfScope, collect, ADJUDICATION_PENDING, VERDICT_FORBIDDEN, VERDICT_REVIEW, VERDICT_UNKNOWN } from '../lib/collect.mjs';
 import { evaluateExpression } from '../lib/spdx.mjs';
 import { LICENSE_FILE_PATTERN, manifestToExpression } from '../lib/license-resolve.mjs';
 
@@ -262,7 +267,12 @@ function main() {
         failures.push(`[${bundle.name}] ${pkg.verdict}：${pkg.name}@${pkg.version}（${pkg.expression ?? '<未声明>'}）`);
       } else if (pkg.verdict === VERDICT_REVIEW) {
         const entry = `${pkg.name}@${pkg.version}（${pkg.expression}）`;
-        if (pkg.adjudication?.status === ADJUDICATION_PENDING) reviewPending.push(`[${bundle.name}] ${entry}`);
+        // 被打包进产物 = 正在分发。distributed:false 的批准在这一刻前提失效，
+        // 等同于「这条 reviewRequired 许可没有有效裁定」，与未登记同一档处理（退出码 2）。
+        // 这半条规则只能在这里判：源码扫描看得到 prod/dev，看不到产物里到底有什么。
+        const outOfScope = approvalOutOfScope(pkg.adjudication, { inDistributionArtifact: true });
+        if (outOfScope) reviewUnregistered.push(`[${bundle.name}] ${entry} —— ${outOfScope}，必须重新裁定`);
+        else if (pkg.adjudication?.status === ADJUDICATION_PENDING) reviewPending.push(`[${bundle.name}] ${entry}`);
         else if (!pkg.adjudication) reviewUnregistered.push(`[${bundle.name}] ${entry}`);
       }
     }
@@ -300,7 +310,7 @@ function main() {
     for (const item of failures) line(`  - ${item}`);
   }
   if (reviewUnregistered.length > 0 && !args.json) {
-    line(`!! bundle 内出现未登记的 reviewRequired ${reviewUnregistered.length} 项，需在 config/license-policy.json 登记并请架构师裁定：`);
+    line(`!! bundle 内出现无有效裁定的 reviewRequired ${reviewUnregistered.length} 项 —— 要么在 config/license-policy.json 登记并请架构师裁定，要么把已失效的批准按「会分发」重裁：`);
     for (const item of reviewUnregistered) line(`  - ${item}`);
   }
   if (exitCode === 0 && !args.json) {

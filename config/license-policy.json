@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "ZLQ-153 §10.3 / §13.1(V11)；CONTRIBUTING.md「依赖许可证准入规则」",
-  "note": "本项目以 AGPL-3.0-only 发布，具有网络传染性。allowed 采用 ZLQ-153 §10.3 与本任务书一致的六项白名单；CONTRIBUTING.md 中更宽的白名单（Zlib、Unlicense、CC0-1.0、MPL-2.0、AGPL-3.0、GPL-3.0-or-later）在本门禁里一律降级为 reviewRequired，由架构师逐案裁定后再提升，已在 ZLQ-159 交付评论中声明该差异。",
+  "note": "本项目以 AGPL-3.0-only 发布，具有网络传染性。allowed 是 ZLQ-153 §10.3 的六项白名单；MPL-2.0、AGPL-3.0、GPL-3.0-or-later、Zlib、Unlicense、CC0-1.0 等一律落在 reviewRequired，由架构师逐案裁定后方可提升，裁定不得反过来放宽档位。CONTRIBUTING.md「依赖许可证准入规则」的三档清单与本文件逐字一致，由 tools/test/license-policy.test.mjs 断言（ZLQ-162 之前文档写的是更宽的白名单，与门禁实际判定不符，已按门禁改正并把该性质钉成测试）。",
   "allowed": ["MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "0BSD"],
   "reviewRequired": {
     "note": "命中即输出「待架构师评审清单」，CI 以退出码 2 标记为需人工裁定：既不静默通过，也不按禁止项一律判死。在 adjudications 中登记架构师结论后方可通过。",
@@ -85,12 +85,12 @@
     ]
   },
   "adjudications": {
-    "note": "命中 reviewRequired 的依赖必须在此登记，否则门禁以退出码 2 失败。status=pending-architect 表示已记录、已输出待评审清单、但尚未裁定：扫描器会大声报告（stdout + artifacts/license-report.json + CI step summary）却不判死，这正是 issue 要求的「既不静默通过，也不一律判死」。架构师裁定后把 status 改为 approved 或 rejected；approved 视同 allowed，rejected 视同 forbidden。--strict 模式下 pending-architect 也返回退出码 2，供裁定完成后回归检查。",
+    "note": "命中 reviewRequired 的依赖必须在此登记，否则门禁以退出码 2 失败。status=pending-architect 表示已记录、已输出待评审清单、但尚未裁定：扫描器会大声报告（stdout + artifacts/license-report.json + CI step summary）却不判死，这正是 issue 要求的「既不静默通过，也不一律判死」。架构师裁定后把 status 改为 approved 或 rejected；approved 视同 allowed，rejected 视同 forbidden。--strict 模式下 pending-architect 也返回退出码 2，供裁定完成后回归检查。批准是**有条件的**：distributed:false 表示「之所以放行，是因为它不随作品或镜像分发」，这个前提由代码强制而不是靠人记住 —— tools/lib/collect.mjs 的 approvalOutOfScope() 一旦发现该包成了生产依赖（scan.mjs）或被打包进产物（bundle-scan.mjs），批准即失效，包退回 reviewRequired 并以退出码 2 要求重新裁定。换句话说，把某个 devDependency 挪进 dependencies 不能悄悄让一份 copyleft 批准跟着搬家。",
     "statusValues": ["pending-architect", "approved", "rejected"],
     "entries": [
       {
         "id": "minimatch-blueoak-1.0.0",
-        "status": "pending-architect",
+        "status": "approved",
         "license": "BlueOak-1.0.0",
         "match": { "names": ["minimatch"], "versions": ["10.2.6"] },
         "distributed": false,
@@ -107,11 +107,14 @@
         ],
         "reason": "BlueOak-1.0.0 是宽松许可（意图等价于 MIT），但不在 ZLQ-153 §10.3 的六项白名单内，因此按规则升级给架构师确认，而不是自行放行。",
         "requestedReviewer": "架构师",
-        "raisedIn": "ZLQ-159"
+        "raisedIn": "ZLQ-159",
+        "adjudicatedIn": "ZLQ-162",
+        "adjudicatedBy": "产品经理（代表项目所有者裁定）",
+        "ruling": "允许。理由是它属于 devDependencies、不随作品或镜像分发，因此不触发 AGPL-3.0 的网络传染义务。该理由即 distributed:false 这一前提；前提由门禁代码强制，一旦 minimatch 变成生产依赖或进入分发产物，本条批准自动失效并要求重新裁定。许可档位仍留在 reviewRequired（BlueOak-1.0.0 不进六项白名单），放行只针对这一条已登记的 (name, version)。"
       },
       {
         "id": "lightningcss-mpl-2.0",
-        "status": "pending-architect",
+        "status": "approved",
         "license": "MPL-2.0",
         "match": { "namePrefixes": ["lightningcss"], "versions": ["1.33.0"] },
         "distributed": false,
@@ -128,12 +131,15 @@
         ],
         "reason": "MPL-2.0 属于 issue 明确要求「不得自行判定」的许可族。当前仅存在于 devDependency 闭包，不随产品分发；是否长期接受由架构师裁定。",
         "requestedReviewer": "架构师",
-        "raisedIn": "ZLQ-159"
+        "raisedIn": "ZLQ-159",
+        "adjudicatedIn": "ZLQ-162",
+        "adjudicatedBy": "产品经理（代表项目所有者裁定）",
+        "ruling": "允许（覆盖 lightningcss@1.33.0 及其 12 个平台二进制变体）。理由同上：全部是 devDependencies、不随作品或镜像分发，MPL-2.0 的文件级 copyleft 也就无从触发。该理由即 distributed:false 这一前提，由门禁代码强制 —— 若 lightningcss 日后被打包进 web bundle 或成为生产依赖，本条批准自动失效并要求重新裁定。许可档位仍留在 reviewRequired（MPL-2.0 不进六项白名单），放行只针对这一条已登记的 (namePrefix, version)。"
       }
     ]
   },
   "platformBinaryFamilies": {
-    "note": "只用于 pnpm 自锁文档（pnpm-lock.yaml 第一个 YAML 文档）里的条目：它们不经过 node_modules，无法用「已安装兄弟包」推断许可证。每条都必须带可核对的证据链接，缺证据不得添加。其余平台变体（@esbuild/*、@rolldown/binding-*、@typescript/typescript-*、lightningcss-*）由解析器的同族兄弟推断处理，不在此登记。",
+    "note": "只用于 pnpm 自锁文档（pnpm-lock.yaml 第一个 YAML 文档）里的条目：它们不经过 node_modules，也不在 registry 事实快照的生成范围内（快照只覆盖依赖闭包里被 os/cpu/libc 约束的条目），因此只能凭人工审计放行。每条都必须带可核对的证据链接，缺证据不得添加。其余平台变体（@esbuild/*、@rolldown/binding-*、@typescript/typescript-*、lightningcss-*、fsevents）不在此登记：它们由 config/license-registry-facts.json 的注册表事实快照解析，并用 integrity 与 lockfile 交叉校验（ZLQ-162）。同族兄弟推断仍保留，但只服务于无平台约束、本机恰好没装的条目——它曾经是这些变体的主要依据，而「兄弟在本机装没装」正是判定随 runner 平台漂移的根源。",
     "entries": [
       {
         "id": "pnpm-self-lockfile",

@@ -344,6 +344,99 @@ describe('ci.yml 的门禁顺序与完整性', () => {
   });
 });
 
+describe('CI 实际执行的步骤顺序与 pnpm verify 的链路顺序等价', () => {
+  // 真实事故（ZLQ-160 首次推送后两份工作流全红）：ci.yml 在 build 之前跑 typecheck，
+  // 而 packages/*/package.json 的 types 指向 ./dist/index.d.ts —— 那个文件只有 build 才产出。
+  // 干净检出下 typecheck 必然报 9 处 TS2307，而本地 `pnpm verify` 把 build 放在第一位，
+  // 所以本地绿、CI 红。根因不是「步骤顺序写错了」，而是**两条自称同一道门禁的流水线
+  // 其实不是同一道门禁**：verify 的顺序与 CI 的顺序各说各话，谁也不校验谁。
+  //
+  // 因此这里锁的是「顺序等价」而不是「某几个步骤的先后」：把每个作业里**实际会执行的**
+  // pnpm 脚本按出现顺序抽出来，只保留同时出现在 verify 链路里的那些，它们在 verify 链路中
+  // 的下标必须严格递增。这样任何一侧单独调序都会立刻变红，两侧无法再各自漂移。
+  const verifyChain = scripts.verify
+    .split('&&')
+    .map((part) => part.trim().replace(/^pnpm\s+/, ''))
+    .filter(Boolean);
+
+  // 与 pnpmScriptsOf 同一套识别规则，但**保留顺序与重复**：Set 会把顺序抹掉，
+  // 而顺序正是这条测试要断言的对象。
+  function jobScriptSequence(job) {
+    const sequence = [];
+    for (const step of job.steps ?? []) {
+      if (typeof step.run !== 'string') continue;
+      for (const match of step.run.matchAll(/^\s*pnpm\s+(?:run\s+)?([a-z0-9:_-]+)/gm)) {
+        const script = match[1];
+        if (script === 'install' || script === 'exec') continue;
+        sequence.push(script);
+      }
+    }
+    return sequence;
+  }
+
+  const jobs = [];
+  for (const [name, doc] of docs) {
+    for (const [jobName, job] of Object.entries(doc.yaml.jobs ?? {})) {
+      jobs.push({ label: `${name}/${jobName}`, sequence: jobScriptSequence(job) });
+    }
+  }
+
+  it('每个作业抽取到的脚本序列都非空（抽不出来说明解析规则失效，断言会空转）', () => {
+    expect(jobs.length).toBeGreaterThanOrEqual(3);
+    for (const { label, sequence } of jobs) {
+      expect(sequence.length, `${label} 没抽到任何 pnpm 脚本`).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(jobs.map((job) => [job.label, job.sequence]))(
+    '%s 的门禁顺序是 pnpm verify 链路的子序列',
+    (_label, sequence) => {
+      const shared = sequence
+        .map((script) => ({ script, index: verifyChain.indexOf(script) }))
+        .filter((item) => item.index >= 0);
+      // 至少要有一项共同门禁：一项都没有的话「严格递增」是恒真的，等于没测。
+      // 不要求 ≥3 —— e2e-smoke 作业只跑 bundles 加一个 verify 里没有的 test:e2e:smoke，
+      // 把阈值定高会让这条测试因为一个合法作业而假失败。防「整体空转」交给下面那条并集断言。
+      expect(
+        shared.length,
+        `${_label} 与 verify 没有任何共同门禁，这条断言会空转`,
+      ).toBeGreaterThanOrEqual(1);
+      for (let i = 1; i < shared.length; i += 1) {
+        const prev = shared[i - 1];
+        const cur = shared[i];
+        expect(
+          cur.index,
+          `${_label}：${cur.script} 在 verify 里排在 ${prev.script} 之前（或同位），` +
+            `但 CI 里在它之后执行 —— 两条流水线不是同一道门禁。` +
+            `CI 顺序 ${sequence.join(' → ')}；verify 顺序 ${verifyChain.join(' → ')}`,
+        ).toBeGreaterThan(prev.index);
+      }
+    },
+  );
+
+  // 单作业阈值放宽到 ≥1 之后，必须有一条整体断言兜住「所有作业加起来其实没测到什么」：
+  // 全部作业覆盖到的 verify 门禁去重后要接近整条链路，否则上面的递增断言可以靠
+  // 「每个作业只跑一项」而恒真。
+  it('全部作业合起来覆盖了 verify 链路的绝大多数门禁', () => {
+    const covered = new Set(
+      jobs
+        .flatMap((job) => job.sequence)
+        .map((script) => verifyChain.indexOf(script))
+        .filter((index) => index >= 0),
+    );
+    expect(covered.size).toBeGreaterThanOrEqual(verifyChain.length - 1);
+  });
+
+  // 反向锁：CI 里出现的门禁不许比 verify 少一个。少一个就意味着「本地全绿但那道门禁在 CI
+  // 里根本不存在」，与顺序漂移同样危险，而且不会让 CI 变红。
+  it('verify 链路里的每一项门禁都在某个工作流作业里被执行', () => {
+    const executed = new Set(jobs.flatMap((job) => job.sequence));
+    for (const script of verifyChain) {
+      expect(executed.has(script), `${script} 在 verify 里但没有任何作业执行它`).toBe(true);
+    }
+  });
+});
+
 describe('脚本名不与 pnpm 内置命令冲突', () => {
   // 真实事故：脚本原本叫 `sbom`，而 pnpm 12 自带 `pnpm sbom` 子命令且**内置优先**，
   // 于是 `pnpm sbom` 跑的是内置命令、以「缺少 --sbom-format」退出码 2 失败，

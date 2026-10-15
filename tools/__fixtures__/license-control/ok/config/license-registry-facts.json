@@ -1,0 +1,39 @@
+{
+  "spec": "littleq/license-registry-facts@1",
+  "note": "控制用例夹具的注册表事实快照（手写，不是生成物）。真实仓库那份由 pnpm license:registry-facts 从注册表抓取；这里 fakebuild-* 是虚构包，注册表上不存在，只能手写。两个平台变体都必须收录：resolver 对**所有**被 os/cpu/libc 约束的条目一律走快照，不管本机装没装到 —— 这正是 ZLQ-162 缺陷 2 的修法（判定不得依赖 runner 上恰好装了什么），只收「本机装不到的那一个」反而会暴露成 unknown。fakebuild-linux-x64 是本夹具里缺陷 2 的最小复刻：修复前它靠已安装的 darwin 兄弟同族推断出许可，到 Linux runner 上 darwin 兄弟也没装，推断链就断了。其余 5 个包没有平台约束，仍从 installed/ 下的真实 package.json 解析，用来源分布断言钉住「快照不是给所有包发证的后门」（否则 violation/ 里「已装但未声明 license」那一禁止项就再也查不出来）。integrity 必须与 pnpm-lock.yaml 里对应条目的 resolution.integrity 逐字节相同，否则 resolveFromFacts 判 unknown（见 tools/test/license-registry-facts.test.mjs）。",
+  "generatedAt": "2026-10-16",
+  "registry": "fixture://not-a-real-registry",
+  "generator": "手写夹具数据",
+  "facts": {
+    "fakebuild-darwin-arm64@1.0.0": {
+      "license": "BSD-2-Clause",
+      "hasLicenseDeclaration": true,
+      "integrity": "sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000002",
+      "os": [
+        "darwin"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "libc": null,
+      "homepage": "https://example.test/fakebuild",
+      "repository": "https://example.test/fakebuild.git",
+      "fetchedFrom": "fixture://not-a-real-registry/fakebuild-darwin-arm64/1.0.0"
+    },
+    "fakebuild-linux-x64@1.0.0": {
+      "license": "BSD-2-Clause",
+      "hasLicenseDeclaration": true,
+      "integrity": "sha512-LQ159FIXTURENOTAREALINTEGRITY00000000000000000000000000000000000000000000000000000000003",
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "libc": null,
+      "homepage": "https://example.test/fakebuild",
+      "repository": "https://example.test/fakebuild.git",
+      "fetchedFrom": "fixture://not-a-real-registry/fakebuild-linux-x64/1.0.0"
+    }
+  }
+}

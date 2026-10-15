@@ -3,14 +3,21 @@
 // 覆盖三层：SPDX 表达式求值（纯函数）、策略文件本身的不变量（issue 点名的白名单/禁止项，
 // 以及「GPL/LGPL/MPL 不得自行判定」）、以及真实 lockfile 闭包的审计结论。
 //
-// 闭包断言刻意只钉「与平台无关的量」：pnpm 只安装匹配当前 os/cpu 的可选平台二进制，
-// 因此 macOS 与 ubuntu-latest 上 installed-manifest 与 platform-sibling-inferred 的**分布**不同
-// （未安装的变体靠同族兄弟推断，许可证结论一致）。把分布写死会让 CI 上出现假失败。
+// 闭包断言把「许可来源」钉成不变量而不是分布计数：ZLQ-162 之前这里刻意只钉与平台无关的量，
+// 因为 pnpm 只安装匹配当前 os/cpu 的可选平台二进制，同一个包在 macOS 上解析来源是
+// installed-manifest、到 ubuntu-latest 上就变成 platform-sibling-inferred —— 任何写死来源的
+// 断言在两个平台上必有一个是假的。那正是 issue 里的第二个缺陷。
+// 现在平台变体一律走提交进仓库的注册表事实快照，licenseSource 只由 (name, version) 决定，
+// 于是可以把更强的性质钉死：被 os/cpu/libc 约束的条目**永不**依赖本机装了什么。
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { collect, findAdjudication, npmLink } from '../lib/collect.mjs';
-import { familyPrefixes, manifestToExpression } from '../lib/license-resolve.mjs';
+import { ADJUDICATION_APPROVED, collect, findAdjudication, npmLink } from '../lib/collect.mjs';
+import {
+  familyPrefixes,
+  isPlatformConstrained,
+  manifestToExpression,
+} from '../lib/license-resolve.mjs';
 import { resolveClosure, stripPeerSuffix } from '../lib/lockfile.mjs';
 import {
   classifyLicenseId,
@@ -162,6 +169,45 @@ describe('策略文件的不变量', () => {
     }
   });
 
+  it('已批准的裁定必须可追责：谁裁的、在哪个任务里、按什么理由，并声明 distributed 前提', () => {
+    // 批准是门禁的放行依据，所以它必须可追责。裁定人/任务号缺失的话，日后没人能判断
+    // 这条批准还该不该成立；distributed 缺失的话 approvalOutOfScope() 会直接放过它
+    // （判断是 `distributed !== false` 就返回 null），等于批准变成无条件有效。
+    const approved = policy.adjudications.entries.filter(
+      (entry) => entry.status === ADJUDICATION_APPROVED,
+    );
+    expect(approved.length).toBeGreaterThan(0);
+    for (const entry of approved) {
+      expect(entry.adjudicatedIn, `${entry.id} 缺裁定任务号`).toBeTruthy();
+      expect(entry.adjudicatedBy, `${entry.id} 缺裁定人`).toBeTruthy();
+      expect(entry.ruling, `${entry.id} 缺裁定理由`).toBeTruthy();
+      expect(entry.ruling, `${entry.id} 的理由没写明前提由代码强制`).toContain('distributed:false');
+      expect(typeof entry.distributed, `${entry.id} 未声明 distributed 前提`).toBe('boolean');
+    }
+    // 当前两条批准（ZLQ-162 治理裁定 3）都以「不随作品或镜像分发」为前提。
+    // 钉住清单是为了让「新增一条批准」成为一次有意识的改动，而不是悄悄多出一行。
+    expect(approved.map((entry) => entry.id).sort()).toEqual([
+      'lightningcss-mpl-2.0',
+      'minimatch-blueoak-1.0.0',
+    ]);
+    for (const entry of approved)
+      expect(entry.distributed, `${entry.id} 的前提应当是不分发`).toBe(false);
+  });
+
+  it('批准没有顺手放宽许可档位：MPL-2.0 与 BlueOak-1.0.0 仍在 reviewRequired', () => {
+    // 治理裁定 3 的口径是「这 13 项允许，但许可档位不动」—— 放行只针对已登记的
+    // (name|namePrefix, version)。把档位加进白名单会让下一个未登记的 MPL 依赖自动通过，
+    // 那才是真的放宽闸门。
+    expect(policy.allowed).not.toContain('MPL-2.0');
+    expect(policy.allowed).not.toContain('BlueOak-1.0.0');
+    expect(policy.reviewRequired.exact).toContain('MPL-2.0');
+    expect(policy.reviewRequired.exact).toContain('BlueOak-1.0.0');
+    // 未登记的包拿不到任何裁定条目，因此仍会停在 review-required → scan.mjs 退出码 2。
+    expect(findAdjudication({ name: 'some-unregistered-mpl-lib', version: '9.9.9' }, policy)).toBe(
+      null,
+    );
+  });
+
   it('平台二进制家族的审计条目必须带证据，且只用于 pnpm 自锁文档', () => {
     for (const family of policy.platformBinaryFamilies.entries) {
       expect(family.evidence?.length, `${family.id} 缺证据链接`).toBeGreaterThan(0);
@@ -178,6 +224,43 @@ describe('策略文件的不变量', () => {
     expect(policy.scanTargets.dockerImage.blockedBy).toBe('ZLQ-157');
     expect(policy.scanTargets.dockerImage.todo).toContain('cdxgen');
     expect(policy.scanTargets.dockerImage.tool).toBe('tools/license/image-scan.mjs');
+  });
+
+  it('CONTRIBUTING.md 的三档清单与策略逐字一致：文档不得与门禁漂移', () => {
+    // ZLQ-162 治理裁定 1 修的就是这个漂移。此前文档把 MPL-2.0、AGPL-3.0、GPL-3.0-or-later、
+    // Zlib、Unlicense、CC0-1.0 写成「允许」，而门禁一直把它们判成待裁定 —— 文档不会自己报错，
+    // 于是「贡献指南说的」和「CI 判的」成了两套口径，正是本任务书点名的那类缺陷。
+    // 提取规则刻意很笨：只认「三档标题行 → 下一个 ** 或 # 行」之间的反引号内容。
+    // 代价是文档那三块里不能给别的东西加反引号，这条约束写在 CONTRIBUTING.md 开头。
+    const doc = readFileSync(join(REPO_ROOT, 'CONTRIBUTING.md'), 'utf8');
+    const section = doc.slice(doc.indexOf('## 依赖许可证准入规则'));
+    expect(section.length, 'CONTRIBUTING.md 里找不到「依赖许可证准入规则」一节').toBeGreaterThan(0);
+
+    const listed = (header) => {
+      const start = section.indexOf(`**${header}**`);
+      expect(start, `CONTRIBUTING.md 里找不到 **${header}** 这一档`).toBeGreaterThan(-1);
+      const lines = section.slice(start).split('\n');
+      const body = [];
+      for (const [index, line] of lines.entries()) {
+        if (index > 0 && (line.startsWith('**') || line.startsWith('#'))) break;
+        body.push(line);
+      }
+      const ids = [...body.join('\n').matchAll(/`([^`]+)`/g)].map((match) => match[1].trim());
+      expect(ids.length, `**${header}** 档下一个标识符都没列`).toBeGreaterThan(0);
+      expect(new Set(ids).size, `**${header}** 档下有重复条目`).toBe(ids.length);
+      return [...ids].sort();
+    };
+
+    expect(listed('允许'), 'CONTRIBUTING.md 的「允许」档与 policy.allowed 不一致').toEqual(
+      [...policy.allowed].sort(),
+    );
+    expect(
+      listed('需逐案评审'),
+      'CONTRIBUTING.md 的「需逐案评审」档与 policy.reviewRequired.exact 不一致',
+    ).toEqual([...policy.reviewRequired.exact].sort());
+    expect(listed('禁止'), 'CONTRIBUTING.md 的「禁止」档与 policy.forbidden 不一致').toEqual(
+      [...policy.forbidden.exact, ...policy.forbidden.substringCaseInsensitive].sort(),
+    );
   });
 });
 
@@ -207,16 +290,34 @@ describe('真实 lockfile 闭包的审计结论', () => {
     expect(result.orphaned).toEqual([]);
   });
 
-  it('每一项待裁定都已登记，且都是不分发的 dev 依赖', () => {
-    const review = result.entries.filter((item) => item.verdict === VERDICT_REVIEW);
-    expect(review.length).toBeGreaterThan(0);
-    for (const item of review) {
-      expect(item.adjudication, `${item.name}@${item.version} 未登记裁定条目`).not.toBeNull();
-      expect(item.kind).toBe('dev');
+  it('许可档位为 reviewRequired 的条目全部已批准，且批准前提（不分发的 dev 依赖）成立', () => {
+    // ZLQ-162 治理裁定 3 把 13 项待裁定（lightningcss MPL-2.0 ×12、minimatch BlueOak-1.0.0）
+    // 全部翻成 approved，于是 verdict === review-required 的条目数归零。断言若还盯着 verdict
+    // 就会空转（循环体一次都不执行），所以改成盯**许可档位**：凡是许可本身落在
+    // reviewRequired 的条目，都必须已登记、已批准、批准前提成立、且确实是 dev 依赖。
+    const reviewTier = result.entries.filter((item) =>
+      (item.ids ?? []).some(
+        (id) => classifyLicenseId(id.replace(/\+$/, ''), policy) === VERDICT_REVIEW,
+      ),
+    );
+    // 空集会让下面所有断言空转，先把「确实存在这一档」钉住。
+    expect(reviewTier.length).toBeGreaterThan(0);
+    for (const item of reviewTier) {
+      const label = `${item.name}@${item.version}（${item.expression}）`;
+      expect(item.adjudication, `${label} 未登记裁定条目`).not.toBeNull();
+      expect(item.adjudication.status, `${label} 的裁定不是 approved`).toBe(ADJUDICATION_APPROVED);
+      // distributed:false 是批准的**前提**而不是备注：approvalOutOfScope() 按它判断批准是否还适用。
+      expect(item.adjudication.distributed, `${label} 的批准没写明前提`).toBe(false);
+      expect(item.adjudication.outOfScope, `${label} 的批准前提已失效`).toBe(null);
+      expect(item.kind, `${label} 是生产依赖，distributed:false 的批准不适用`).toBe('dev');
+      expect(item.verdict, `${label} 已批准却未被放行`).toBe(VERDICT_ALLOWED);
       expect(item.link).toBe(npmLink(item.name, item.version));
     }
-    // 已登记但仍是 pending-architect：门禁不判死，但必须能在报告里被看见。
-    expect(result.summary.needsAdjudication.length).toBe(review.length);
+    // 报告里不该再有任何待裁定项。needsAdjudication 是「verdict 仍为 review-required」的清单，
+    // approvalsOutOfScope 是「批准前提已失效」的清单 —— 两者都必须为空，门禁才是退出码 0。
+    expect(result.summary.needsAdjudication).toEqual([]);
+    expect(result.summary.approvalsOutOfScope).toEqual([]);
+    expect(result.summary.byVerdict[VERDICT_REVIEW]).toBe(0);
   });
 
   it('判为允许的项，许可证一定落在六项白名单内', () => {
@@ -235,6 +336,42 @@ describe('真实 lockfile 闭包的审计结论', () => {
       if (item.licenseSource === 'platform-sibling-inferred') {
         expect(item.inferredFrom).toMatch(/@/);
       }
+    }
+  });
+
+  it('被 os/cpu/libc 约束的条目一律不靠「本机装了什么」解析', () => {
+    const constrained = result.entries.filter(isPlatformConstrained);
+    // 空集会让下面三条断言全部空转，所以先把「确实存在平台变体」钉住。
+    expect(constrained.length).toBeGreaterThan(50);
+    for (const item of constrained) {
+      expect(
+        ['registry-facts', 'audited-policy-entry'],
+        `${item.name}@${item.version} 的来源是 ${item.licenseSource}，` +
+          '这意味着它的判定取决于 runner 上是否恰好装了这个平台变体',
+      ).toContain(item.licenseSource);
+      // 快照与本机已安装 manifest 说法矛盾时解析器返回 unresolved，上面那条已经排除；
+      // 这里再钉一次事实来源确实带了可核对的出处，而不是一句「查过了」。
+      if (item.licenseSource === 'registry-facts') {
+        expect(item.evidence ?? item.homepage ?? item.repository).toBeTruthy();
+      } else {
+        expect(item.policyId).toBeTruthy();
+      }
+    }
+  });
+
+  it('无平台约束的条目仍从已安装 manifest 解析 —— 快照不是绕过安装检查的后门', () => {
+    // 反向断言：如果注册表事实快照被用来给所有包发证，那「已装但未声明 license」这一
+    // 禁止项就再也查不出来了（快照里根本不存在这种包，registry 上的元数据总有 license 字段）。
+    // 只让平台变体走快照，才能让本机装得到的包继续被真实 manifest 检验。
+    const unconstrained = result.entries.filter(
+      (item) => !isPlatformConstrained(item) && item.licenseSource !== 'audited-policy-entry',
+    );
+    expect(unconstrained.length).toBeGreaterThan(100);
+    for (const item of unconstrained) {
+      expect(
+        item.licenseSource,
+        `${item.name}@${item.version} 没有平台约束，本机能装到它，就该读真实的 package.json`,
+      ).toBe('installed-manifest');
     }
   });
 

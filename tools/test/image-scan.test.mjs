@@ -127,17 +127,47 @@ describe('镜像组件的策略判定', () => {
     expect(rows[0].ids).toEqual(['MIT', 'SSPL-1.0']);
   });
 
-  it('已登记的待裁定项进入 needsAdjudication，但不算「未登记」', () => {
+  it('镜像就是分发产物：distributed:false 的批准在这里一律前提失效', () => {
+    // minimatch@10.2.6（BlueOak-1.0.0）在线上策略里是 approved + distributed:false，
+    // 源码扫描下它作为 devDependency 被放行。但镜像**本身就是**分发产物 —— 批准放行它的
+    // 唯一理由（不随作品或镜像分发）在镜像里当场不成立，于是批准不得沿用。
+    // 这条规则由 tools/lib/collect.mjs 的 approvalOutOfScope() 实现，镜像扫描传入
+    // inDistributionArtifact:true；ZLQ-162 之前 approved 在这里会静默通过。
     const { rows, summary } = evaluateComponents(
       { components: [component('minimatch', '10.2.6', id('BlueOak-1.0.0'))] },
       policy,
     );
+    expect(rows[0].verdict).toBe('review-required');
     expect(rows[0].adjudication).toEqual({
       id: 'minimatch-blueoak-1.0.0',
-      status: 'pending-architect',
+      status: 'approved',
+      distributed: false,
+      outOfScope:
+        '裁定 minimatch-blueoak-1.0.0 的前提是 distributed:false（不随产物分发），但它已被打包进分发产物',
     });
+    // 三档标签不得混标：它有裁定条目（不是「未登记」），失效原因单列一档。
     expect(summary.needsAdjudication).toEqual(['minimatch@10.2.6']);
     expect(summary.unregistered).toEqual([]);
+    expect(summary.approvalsOutOfScope).toEqual([
+      {
+        package: 'minimatch@10.2.6',
+        adjudication: 'minimatch-blueoak-1.0.0',
+        reason:
+          '裁定 minimatch-blueoak-1.0.0 的前提是 distributed:false（不随产物分发），但它已被打包进分发产物',
+      },
+    ]);
+  });
+
+  it('未登记的 reviewRequired 组件进 needsAdjudication 与 unregistered', () => {
+    const { rows, summary } = evaluateComponents(
+      { components: [component('some-agpl-lib', '1.0.0', id('AGPL-3.0-only'))] },
+      policy,
+    );
+    expect(rows[0].verdict).toBe('review-required');
+    expect(rows[0].adjudication).toBe(null);
+    expect(summary.needsAdjudication).toEqual(['some-agpl-lib@1.0.0']);
+    expect(summary.unregistered).toEqual(['some-agpl-lib@1.0.0']);
+    expect(summary.approvalsOutOfScope).toEqual([]);
   });
 
   it('提取器按 cdxgen → trivy 顺序探测', () => {
@@ -207,7 +237,9 @@ describe('命令行契约', () => {
     expect(runScan([component('sspl-lib', '1.0.0', id('SSPL-1.0'))]).exitCode).toBe(1);
     expect(runScan([component('silent-lib', '1.0.0')]).exitCode).toBe(1);
     expect(runScan([component('some-agpl-lib', '1.0.0', id('AGPL-3.0-only'))]).exitCode).toBe(2);
-    expect(runScan([component('minimatch', '10.2.6', id('BlueOak-1.0.0'))]).exitCode).toBe(0);
+    // minimatch 的批准以 distributed:false 为前提，而镜像就是分发产物：前提失效，退回待裁定档。
+    // ZLQ-162 之前这里静默返回 0——approvalOutOfScope() 补上的正是这个洞。
+    expect(runScan([component('minimatch', '10.2.6', id('BlueOak-1.0.0'))]).exitCode).toBe(2);
   });
 
   it('报告里不含本机绝对路径', () => {
