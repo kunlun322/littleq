@@ -1,0 +1,54 @@
+# Dependency-license gate — PRD V11 / F9.2 / AGPL-3.0 obligations.
+#
+# Minimal skeleton on purpose: no build, no tests — the tech stack is not
+# chosen yet (see the parent architecture-design task). The gate is
+# fail-closed: as soon as any dependency manifest lands in the repo while no
+# license checker is configured, this workflow fails, so dependencies can
+# never arrive without their AGPL-compatibility check. Tool candidates per
+# stack are listed in CONTRIBUTING.md.
+name: license-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-license-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect dependency manifests
+        id: manifests
+        run: |
+          found=$(find . \
+            -type d \( -name node_modules -o -name .git -o -name dist -o -name build \) -prune -o \
+            -type f \( \
+              -name 'package.json' -o -name 'package-lock.json' -o -name 'pnpm-lock.yaml' -o -name 'yarn.lock' \
+              -o -name 'requirements*.txt' -o -name 'pyproject.toml' -o -name 'Pipfile.lock' \
+              -o -name 'go.mod' -o -name 'go.sum' \
+              -o -name 'Cargo.toml' -o -name 'Cargo.lock' \
+              -o -name 'pubspec.yaml' -o -name 'pom.xml' \
+              -o -name 'build.gradle' -o -name 'build.gradle.kts' \
+            \) -print)
+          if [ -n "$found" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Dependency manifests detected:"
+            echo "$found"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No dependency manifests yet — license gate passes trivially."
+          fi
+
+      - name: Fail closed until a license checker is configured
+        if: steps.manifests.outputs.found == 'true'
+        run: |
+          echo "::error::Dependency manifests exist but no license checker is configured yet."
+          echo "Configure the stack-appropriate checker (candidates: CONTRIBUTING.md)"
+          echo "with the AGPL-3.0 compatibility allowlist in the same PR that introduces dependencies."
+          exit 1
