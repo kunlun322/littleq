@@ -16,7 +16,7 @@
 // 替换过程中最容易犯的错就是顺手把 fail-closed 删掉——那样依赖可以在没有检查器的情况下
 // 从别的生态溜进来。所以它不是注释里的承诺，是这里跑出来的结果。
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -195,6 +195,13 @@ describe('license-check.yml 的 fail-closed 性质没有被削弱', () => {
     ({ step }) =>
       typeof step.run === 'string' && step.run.includes('检查器') && step.run.includes('exit 1'),
   );
+  const gateJob = doc.yaml.jobs['dependency-license-gate'];
+  const gateSteps = gateJob?.steps ?? [];
+  const requireNodeStep = gateSteps.find((step) => step.id === 'require_node_manifest');
+
+  const NODE_GATE_IF = "steps.manifests.outputs.node == 'true'";
+  const REQUIRE_NODE_IF = "steps.manifests.outputs.node != 'true'";
+  const FOREIGN_IF = "steps.manifests.outputs.foreign == 'true'";
 
   it('工作流名保持 license-check（分支保护的必需状态上下文名）', () => {
     expect(doc.yaml.name).toBe('license-check');
@@ -243,6 +250,53 @@ describe('license-check.yml 的 fail-closed 性质没有被削弱', () => {
     };
   }
 
+  // 真 bash 执行某个步骤的 run 块。断言步骤到底会不会失败，只能靠跑，
+  // 靠 YAML 里有没有 `exit 1` 这个字符串是证明不了的。
+  function runStepBash(step, cwd) {
+    expect(typeof step.run, `步骤 ${step.name ?? step.id ?? step.uses} 没有 run 块`).toBe('string');
+    const run = spawnSync('bash', ['-c', step.run], { cwd, encoding: 'utf8' });
+    expect(run.error, `bash 起不来：${run.error?.message}`).toBeUndefined();
+    return { status: run.status, stdout: run.stdout ?? '', stderr: run.stderr ?? '' };
+  }
+
+  // 探测步骤日志里那个「遍历所得真实清单数」。它只用于日志，不参与 node 判定，
+  // 但 prune 列表是否完整要靠它钉住（删掉任何一个 prune 名字，计数就会涨）。
+  function traversedCount(stdout) {
+    const match = /清单\s+(\d+)\s+个/.exec(stdout ?? '');
+    expect(match, `探测日志里没有打印遍历计数：${stdout}`).toBeTruthy();
+    return Number(match[1]);
+  }
+
+  // 按 GitHub 的语义走一遍步骤序列：没有 `if` 的步骤隐含 `success()`，
+  // 前一步失败则后续（`always()` 除外）全部跳过。
+  // 遇到两道断言步骤时用真 bash 执行，由**真实退出码**决定 job 是否已红。
+  // `if` 只接受本工作流真实出现的写法，遇到没建模过的表达式直接抛——
+  // 否则模型会静默漂移成「什么都不选」，那正是本文件要猎的假绿形状。
+  function walkJob(steps, outputs, cwd) {
+    const selected = [];
+    const guardRuns = [];
+    let failed = null;
+    for (const step of steps) {
+      const expr = step.if;
+      let eligible;
+      if (expr === undefined || expr === null) eligible = true;
+      else if (String(expr).trim() === 'always()') eligible = true;
+      else if (expr === NODE_GATE_IF) eligible = outputs.node === 'true';
+      else if (expr === REQUIRE_NODE_IF) eligible = outputs.node !== 'true';
+      else if (expr === FOREIGN_IF) eligible = outputs.foreign === 'true';
+      else throw new Error(`未建模的 if 表达式：${JSON.stringify(expr)}`);
+      if (!eligible) continue;
+      if (failed) continue;
+      selected.push(step);
+      if (step === failClosedStep?.step || step === requireNodeStep) {
+        const run = runStepBash(step, cwd);
+        guardRuns.push({ step, run });
+        if (run.status !== 0) failed = step;
+      }
+    }
+    return { selected, guardRuns, failed };
+  }
+
   it('对照：只有 Node 清单时 foreign=false、node=true', () => {
     const run = runDetect(['package.json', 'pnpm-lock.yaml']);
     expect(run.status, run.stderr).toBe(0);
@@ -257,22 +311,222 @@ describe('license-check.yml 的 fail-closed 性质没有被削弱', () => {
     expect(run.stdout).toContain('pyproject.toml');
   });
 
-  it('零清单时两个开关都是 false（保留原工作流的 trivially-pass 语义）', () => {
-    const run = runDetect([]);
-    expect(run.status).toBe(0);
+  it('零清单时探测器只报告事实（node=false / foreign=false），且**无权**宣布 job 通过', () => {
+    const dir = scratch('lq-ci-zeromanifest-');
+    const run = runDetect([], dir);
+    // 保留并加强原有的三个事实断言：探测脚本自身退出 0，两个开关都是 false。
+    expect(run.status, run.stderr).toBe(0);
     expect(run.output).toContain('foreign=false');
     expect(run.output).toContain('node=false');
-    expect(run.stdout).toContain('passes trivially');
+    // 原来是正向断言 `toContain('passes trivially')`——那正是脚手架期语义。
+    // 现在反过来：探测器只报告事实，「job 能不能过」由 require_node_manifest 决定。
+    expect(run.stdout, '探测日志仍在宣称 job 白过').not.toContain('passes trivially');
+    // 同一用例里执行前提断言步骤的真 run 块：真 bash 退出码必须是 1。
+    expect(requireNodeStep, '找不到 id: require_node_manifest 的前提断言步骤').toBeTruthy();
+    const gate = runStepBash(requireNodeStep, dir);
+    expect(gate.status, `前提断言没有以 1 退出：${gate.stdout}${gate.stderr}`).toBe(1);
+    expect(gate.stdout).toContain('::error::');
   });
 
-  it('在真实仓库上跑：Node 清单存在、无外来生态', () => {
+  it('在真实仓库上跑：node=true 的判据是根 pnpm-lock.yaml，且无外来生态', () => {
     const run = runDetect([], REPO_ROOT);
     expect(run.status, run.stderr).toBe(0);
     expect(run.output).toContain('foreign=false');
     expect(run.output).toContain('node=true');
-    // tools/__fixtures__ 下的对照用 package.json 会被 find 命中，这是预期的：
-    // 它们属于 Node 生态，且从不进入锁文件，所以不影响扫描结果。
-    expect(run.stdout).toContain('Node/pnpm 清单');
+    // 判据锚点是仓库根锁文件本身，不是「树里某处出现了 Node 样文件名」。
+    expect(existsSync(join(REPO_ROOT, 'pnpm-lock.yaml')), '根 pnpm-lock.yaml 不存在').toBe(true);
+    // 刻意不硬编码遍历总数：它会随仓库清单增减漂移。夹具排除由下面的合成树钉住。
+    expect(traversedCount(run.stdout), '真实仓库遍历不到任何 Node 清单').toBeGreaterThan(0);
+    // PM 补充 B：判据与遍历计数必须**分开**打印，别让人从数字变化里反推判据变了。
+    const lines = run.stdout.split('\n');
+    expect(
+      lines.some((line) => line.includes('判据') && line.includes('pnpm-lock.yaml')),
+      '日志没有单独说明「判据 = 仓库根锁文件」',
+    ).toBe(true);
+    expect(
+      lines.some((line) => line.includes('遍历') && /清单\s+\d+\s+个/.test(line)),
+      '日志没有单独打印遍历所得的真实清单数',
+    ).toBe(true);
+  });
+
+  it('prune 列表四个名字都在位，且夹具按**明确路径**排除', () => {
+    const run = detectStep.step.run;
+    // 只截取 `-type d … -prune` 这一段真表达式：整块 run 里还有解释性注释，
+    // 注释里写着「刻意不用全局 -name __fixtures__」，拿整块做零命中断言会被自己的说明文字绊倒。
+    const start = run.indexOf('-type d');
+    const end = run.indexOf('-prune', start);
+    expect(start, '探测步骤里没有 -type d … -prune 表达式').toBeGreaterThanOrEqual(0);
+    expect(end, '找不到 -prune').toBeGreaterThan(start);
+    const pruneGroup = run.slice(start, end);
+    for (const name of ['node_modules', '.git', 'dist', 'build']) {
+      expect(pruneGroup, `prune 列表里少了 ${name}`).toContain(`-name ${name}`);
+    }
+    expect(pruneGroup, '夹具没有按明确路径 ./tools/__fixtures__ 排除').toContain(
+      '-path ./tools/__fixtures__',
+    );
+    // 全局名字匹配会连带误排未来可能属于真实依赖面的同名目录。
+    expect(pruneGroup, '出现了全局 -name __fixtures__').not.toContain('-name __fixtures__');
+  });
+
+  // Q4 固定输入：这些「诱饵」清单全部位于会被 prune 的目录下，
+  // 用来证明夹具与构建目录撑不起 node=true。
+  // 四个 prune 名字（node_modules / .git / dist / build）逐个覆盖 —— PM 补充 A。
+  const PRUNE_BAIT = [
+    'node_modules/package.json',
+    '.git/package.json',
+    'dist/package.json',
+    'build/package.json',
+    'tools/__fixtures__/case/package.json',
+    'tools/__fixtures__/case/pnpm-lock.yaml',
+  ];
+  const DOUBLE_ZERO_TREE = ['README.md', 'src/index.ts', ...PRUNE_BAIT];
+  const POSITIVE_TREE = [
+    'README.md',
+    'src/index.ts',
+    'package.json',
+    'pnpm-lock.yaml',
+    ...PRUNE_BAIT,
+  ];
+
+  it('合成树（无根锁文件）：被 prune 的伪清单撑不起 node=true → 双零', () => {
+    const run = runDetect(DOUBLE_ZERO_TREE);
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.output).toContain('node=false');
+    expect(run.output).toContain('foreign=false');
+    // 钉住 prune：任何一个 prune 名字被删掉，这里的计数就会大于 0。
+    expect(traversedCount(run.stdout), 'prune 列表漏了某个名字，伪清单被算成真实依赖面').toBe(0);
+  });
+
+  it('正对照树（有根锁文件）：node=true，且遍历计数只算真实清单', () => {
+    const run = runDetect(POSITIVE_TREE);
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.output).toContain('node=true');
+    expect(run.output).toContain('foreign=false');
+    // 期望值来自夹具本身（根 package.json + 根 pnpm-lock.yaml 两个），
+    // 不读宿主 node_modules、不读平台、不读真实仓库计数。
+    expect(traversedCount(run.stdout)).toBe(2);
+  });
+
+  it('YAML 里恰有一个 require_node_manifest，条件精确、位置在 foreign 之后首道门禁之前', () => {
+    const hits = allSteps(doc.yaml).filter(({ step }) => step.id === 'require_node_manifest');
+    expect(hits.length, 'require_node_manifest 必须恰好一个').toBe(1);
+    expect(requireNodeStep.if, '条件被改动就等于把白过路径又开回来了').toBe(REQUIRE_NODE_IF);
+    const at = (predicate) => gateSteps.findIndex(predicate);
+    const manifestsAt = at((step) => step.id === 'manifests');
+    const foreignAt = at((step) => step.if === FOREIGN_IF);
+    const requireAt = at((step) => step.id === 'require_node_manifest');
+    const firstGateAt = at((step) => step.if === NODE_GATE_IF);
+    expect(manifestsAt, '找不到 manifests 探测步骤').toBeGreaterThanOrEqual(0);
+    expect(foreignAt, '找不到 foreign fail-closed 步骤').toBeGreaterThan(manifestsAt);
+    expect(requireAt, '前提断言必须排在 foreign fail-closed 之后').toBeGreaterThan(foreignAt);
+    expect(firstGateAt, '前提断言必须排在第一道 Node 门禁之前').toBeGreaterThan(requireAt);
+  });
+
+  it('require_node_manifest 之后、always() 之前的每一步都仍带精确的 node == true 条件', () => {
+    const requireAt = gateSteps.findIndex((step) => step.id === 'require_node_manifest');
+    expect(requireAt, '找不到 require_node_manifest 步骤').toBeGreaterThanOrEqual(0);
+    const conditional = gateSteps
+      .slice(requireAt + 1)
+      .filter((step) => String(step.if ?? '').trim() !== 'always()');
+    // 10 是 ZLQ-165 时的门禁数，这里当作**下限**：门禁被删减即红。
+    expect(conditional.length, 'Node 门禁被删减了').toBeGreaterThanOrEqual(10);
+    for (const step of conditional) {
+      expect(step.if, `门禁「${step.name ?? step.uses}」的条件被削弱`).toBe(NODE_GATE_IF);
+    }
+  });
+
+  // 契约判定函数：只看结构与条件，供 legacy 负对照使用。
+  // 负对照必须能把它翻成 false，否则它就是空洞的（架构师 Q4「证明对照自身不空洞」第 3 条）。
+  function holdsMissingManifestContract(job) {
+    const steps = job?.steps ?? [];
+    const at = (predicate) => steps.findIndex(predicate);
+    const manifestsAt = at((step) => step.id === 'manifests');
+    const foreignAt = at((step) => step.if === FOREIGN_IF);
+    const requireAt = at((step) => step.id === 'require_node_manifest');
+    const firstGateAt = at((step) => step.if === NODE_GATE_IF);
+    if (manifestsAt < 0 || foreignAt < 0 || requireAt < 0 || firstGateAt < 0) return false;
+    if (!(manifestsAt < foreignAt && foreignAt < requireAt && requireAt < firstGateAt))
+      return false;
+    const require = steps[requireAt];
+    if (require.if !== REQUIRE_NODE_IF) return false;
+    if (typeof require.run !== 'string' || !/^\s*exit\s+1\s*$/m.test(require.run)) return false;
+    if (steps.filter((step) => step.if === NODE_GATE_IF).length < 10) return false;
+    return true;
+  }
+
+  it('legacy 负对照：从 job 深拷贝里移除 require_node_manifest，契约判定必须翻成 false', () => {
+    expect(holdsMissingManifestContract(gateJob), '当前 job 不满足「根锁缺失即红」契约').toBe(true);
+    // 只操作固定的 YAML 对象，不从宿主推导期望。
+    const legacy = structuredClone(gateJob);
+    legacy.steps = legacy.steps.filter((step) => step.id !== 'require_node_manifest');
+    expect(
+      holdsMissingManifestContract(legacy),
+      '移除该步骤后判定仍为 true —— 判定函数是空洞的，它没在检查任何东西',
+    ).toBe(false);
+  });
+
+  // 四行真值表（架构师 Q1）。每一行的 node/foreign 都由**真 bash 跑探测脚本**得到，
+  // 不是手写常量；决定 job 结论的那一步同样用真 bash 执行、用真实退出码判定。
+  // 结论列统一为「执行 Node 门禁 或 job 失败」，两者必居其一。
+  const TRUTH_TABLE = [
+    {
+      tree: ['package.json', 'pnpm-lock.yaml'],
+      outputs: { node: 'true', foreign: 'false' },
+      outcome: 'gates',
+      row: 'node=true / foreign=false → 10 道 Node 门禁执行',
+    },
+    {
+      tree: ['package.json', 'pnpm-lock.yaml', 'backend/pyproject.toml'],
+      outputs: { node: 'true', foreign: 'true' },
+      outcome: 'red',
+      row: 'node=true / foreign=true → foreign fail-closed 步骤失败',
+    },
+    {
+      tree: DOUBLE_ZERO_TREE,
+      outputs: { node: 'false', foreign: 'false' },
+      outcome: 'red',
+      row: 'node=false / foreign=false → 前提断言失败（ZLQ-165 的双零）',
+    },
+    {
+      tree: ['backend/requirements.txt'],
+      outputs: { node: 'false', foreign: 'true' },
+      outcome: 'red',
+      row: 'node=false / foreign=true → foreign 步骤先失败，job 已红',
+    },
+  ];
+
+  it.each(TRUTH_TABLE.map((item) => [item.row, item]))('%s', (_row, item) => {
+    const dir = scratch('lq-ci-truth-');
+    const detect = runDetect(item.tree, dir);
+    expect(detect.status, detect.stderr).toBe(0);
+    // 先证明这一行的 outputs 是探测脚本真跑出来的，而不是我写死的假设。
+    expect(detect.output, `探测没有给出 node=${item.outputs.node}`).toContain(
+      `node=${item.outputs.node}`,
+    );
+    expect(detect.output, `探测没有给出 foreign=${item.outputs.foreign}`).toContain(
+      `foreign=${item.outputs.foreign}`,
+    );
+
+    const walk = walkJob(gateSteps, item.outputs, dir);
+    const selectedGates = walk.selected.filter((step) => step.if === NODE_GATE_IF);
+
+    if (item.outcome === 'gates') {
+      expect(walk.failed, 'node=true/foreign=false 时不该有断言步骤失败').toBeNull();
+      expect(selectedGates.length, 'Node 门禁被删减了').toBeGreaterThanOrEqual(10);
+    } else {
+      expect(
+        walk.failed,
+        `这一行 job 必须变红；实测 selected=${walk.selected.length}、门禁=${selectedGates.length}`,
+      ).not.toBeNull();
+      const deciding = walk.guardRuns.at(-1);
+      expect(deciding.run.status, `决定 job 结论的步骤没有以 1 退出`).toBe(1);
+      expect(deciding.run.stdout).toContain('::error::');
+    }
+    // 「执行 Node 门禁 或 job 失败」——绝不允许两者都不成立（那就是白过）。
+    expect(
+      selectedGates.length >= 10 || walk.failed !== null,
+      '出现了「门禁全部跳过且 job 成功」的白过组合',
+    ).toBe(true);
   });
 
   it('fail-closed 步骤在 foreign=true 时确实以 1 退出', () => {
@@ -445,8 +699,31 @@ describe('脚本名不与 pnpm 内置命令冲突', () => {
   //
   // 内置命令列表从 `pnpm help` 实时解析，不写死：pnpm 每个大版本都在加子命令，
   // 写死的清单会在升级后变成一份假的安全感。
+  //
+  // 解析必须发生在**用例体内**，不能发生在 describe 收集期。
+  // 真实事故：这里原本是一行 `const builtins = pnpmBuiltins();` 写在 describe 顶层，
+  // 于是 pnpm 不在 PATH 时（corepack 垫片没启用、或最小化 runner）spawnSync 只填 error
+  // （ENOENT），status 是 null、stderr 是 undefined，`expect(run.status).toBe(0)`
+  // 在**收集期**就抛出。vitest 把收集期抛错记成整块 describe 的用例全部不注册：
+  // 单文件跑出来是 `(0 test)` / `Tests no tests`，全量跑出来是总数静默缩量，
+  // 而下面那条本该先红的守卫用例「解析出了内置命令表」连注册的机会都没有。
+  // 门禁不是变红，是**消失**，且 job 仍然绿——正是 ZLQ-165 报的那个「双零」形状。
+  //
+  // 刻意不用 beforeAll 兜：beforeAll 抛错同样把用例记成 skipped，形状一模一样。
+  // 刻意不用 describe.skip / skipIf：那是把这一整组门禁静默跳过，比现状更危险。
+  // 失败也**不缓存**：每条用例都要各自报红，不能第一条红完剩下的就悄悄不跑了。
+  let builtinsCache;
   function pnpmBuiltins() {
+    if (builtinsCache !== undefined) return builtinsCache;
     const run = spawnSync('pnpm', ['help'], { cwd: REPO_ROOT, encoding: 'utf8' });
+    if (run.error) {
+      throw new Error(
+        `无法执行 pnpm help（${run.error.code ?? 'spawn 失败'}：${run.error.message}）—— ` +
+          `内置命令表解析不出来，本组「脚本名不与 pnpm 内置命令冲突」的门禁一条也判不了。` +
+          `修法：启用 corepack 垫片（corepack enable pnpm；仓库已钉 packageManager: pnpm@12.11.2），` +
+          `或把 pnpm 装进 PATH 后重跑。不要用 skip 让它变绿。`,
+      );
+    }
     expect(run.status, `pnpm help 失败：${run.stderr}`).toBe(0);
     const names = new Set();
     let inCommands = false;
@@ -464,12 +741,12 @@ describe('脚本名不与 pnpm 内置命令冲突', () => {
       const alias = /\[alias(?:es)?:\s*([^\]]+)\]/.exec(description);
       if (alias) for (const item of alias[1].split(',')) if (item.trim()) names.add(item.trim());
     }
+    builtinsCache = names;
     return names;
   }
 
-  const builtins = pnpmBuiltins();
-
   it('解析出了内置命令表（解析失败时这条会先红，而不是让下面的断言空转）', () => {
+    const builtins = pnpmBuiltins();
     expect(builtins.size).toBeGreaterThan(30);
     for (const expected of ['install', 'add', 'run', 'exec', 'publish', 'sbom', 'licenses']) {
       expect(builtins.has(expected), `pnpm help 里没解析出 ${expected}`).toBe(true);
@@ -477,6 +754,7 @@ describe('脚本名不与 pnpm 内置命令冲突', () => {
   });
 
   it('sbom 确实是内置命令，而本仓库没有叫 sbom 的脚本', () => {
+    const builtins = pnpmBuiltins();
     expect(builtins.has('sbom')).toBe(true);
     expect(scripts.sbom).toBeUndefined();
     expect(scripts['sbom:generate']).toBeTypeOf('string');
@@ -488,10 +766,12 @@ describe('脚本名不与 pnpm 内置命令冲突', () => {
 
   it.each(Object.keys(scripts).sort())('脚本 %s 不被内置命令遮蔽', (script) => {
     if (SCRIPT_FORWARDING.includes(script)) return;
+    const builtins = pnpmBuiltins();
     expect(builtins.has(script), `pnpm ${script} 会跑内置命令而不是这个脚本，请改名`).toBe(false);
   });
 
   it('CI 与 verify 里引用的每个脚本名都能被 pnpm <script> 直接调起', () => {
+    const builtins = pnpmBuiltins();
     for (const script of ciScripts) {
       expect(
         SCRIPT_FORWARDING.includes(script) || !builtins.has(script),
