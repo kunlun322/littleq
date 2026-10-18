@@ -128,6 +128,52 @@
         ],
         "packages": ["pg", "postgres", "mysql2", "better-sqlite3", "minio"]
       }
+    },
+    {
+      "id": "api-contract-no-platform-coupling",
+      "spec": "ZLQ-153 §1.3 / §3.1 / §5.4（附录 A §3.5）",
+      "description": "API 契约层是纯 schema 与派生层，双向受约束。出向：不得依赖平台 SDK、基础设施、设计系统、作品契约或任何应用单元——唯一允许的 workspace 依赖是 packages/domain（DTO 与错误目录的事实源）。入向：只有 apps/api 与将来的 packages/application 可以消费它，其余单元默认拒绝，防止契约层被反向依赖成公共内核、进而让任何一次契约变更都变成全仓库变更。",
+      "from": ["packages/api-contract"],
+      "appliesTo": ["source", "manifest"],
+      "deny": {
+        "units": [
+          "apps/*",
+          "packages/infra",
+          "packages/design-system",
+          "packages/work-contract",
+          "packages/application"
+        ],
+        "packagePrefixes": [
+          "@nestjs/",
+          "@fastify/",
+          "@vercel/",
+          "@aws-sdk/",
+          "@cloudflare/",
+          "@libsql/",
+          "@ai-sdk/",
+          "@anthropic-ai/",
+          "@google/",
+          "drizzle-",
+          "openai",
+          "dashscope"
+        ],
+        "packages": [
+          "pg",
+          "postgres",
+          "mysql2",
+          "better-sqlite3",
+          "minio",
+          "cookie",
+          "express",
+          "fastify",
+          "@types/pg"
+        ]
+      },
+      "inbound": {
+        "targetUnit": "packages/api-contract",
+        "allowFrom": ["apps/api", "packages/application"],
+        "default": "deny"
+      }
     }
   ]
 }

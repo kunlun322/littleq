@@ -1,0 +1,9 @@
+{
+  "apiMajor": 1,
+  "designBaseline": "88edd3f57ebf3fa34dd86c083a2757f21d969c9b",
+  "introducedFromBase": "a169835f4381779c9eccf8793afd439c308d5f35",
+  "snapshots": {
+    "contracts/errors/v1/error-catalog.json": "f762ff6040bb4eae94c4bc00c0bcbec8f479a22c34e6ace885e89a5697798d13",
+    "contracts/openapi/v1/openapi.json": "b5b898527aad6ed393f52703e8b4063d225cbfb66c2efbe114a2211daded67ed"
+  }
+}

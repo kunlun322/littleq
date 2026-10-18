@@ -265,8 +265,8 @@ describe('策略文件的不变量', () => {
 });
 
 describe('真实 lockfile 闭包的审计结论', () => {
-  // 一次算清，后面各条断言共用。ZLQ-159 交付时的审计基线：
-  // 闭包 225 个第三方包（项目 lockfile 210 + pnpm 自锁文档 15），生产依赖仅 zod 一个。
+  // 一次算清，后面各条断言共用。闭包总量是仓库清单的函数（新增一个 workspace 包或
+  // 一个运行时依赖都会让它变），因此**故意不写成常量** —— 只断言量级与结构。
   const result = collect({ repoRoot: REPO_ROOT });
 
   it('闭包非空，且覆盖了 pnpm 自锁文档（包管理器本体也是供应链）', () => {
@@ -276,11 +276,18 @@ describe('真实 lockfile 闭包的审计结论', () => {
     expect(result.entries.some((item) => item.name === 'pnpm')).toBe(true);
   });
 
-  it('生产依赖只有 zod —— 其余全部是构建期依赖', () => {
-    const prod = result.entries.filter((item) => item.kind === 'prod');
-    expect(prod.map((item) => `${item.name}@${item.version}`)).toEqual(['zod@4.6.7']);
-    expect(result.summary.prod).toBe(1);
-    expect(result.summary.dev).toBe(result.entries.length - 1);
+  it('生产依赖只有 zod 与 zod-openapi —— 其余全部是构建期依赖', () => {
+    // 这两个包就是 API 契约层的全部运行时分发面：zod 描述 DTO，zod-openapi 单向派生
+    // OpenAPI 文档。断言的是**集合**而不是数量 —— 数量会随契约层演进变化，而「运行
+    // 时分发面只允许这两个」是许可治理裁定（附录 A §3.5 / PM §4.7 精确锁定 6.0.2）。
+    // 排序后比较：collect() 的遍历顺序不是契约的一部分。
+    const prod = result.entries
+      .filter((item) => item.kind === 'prod')
+      .map((item) => `${item.name}@${item.version}`)
+      .sort();
+    expect(prod).toEqual(['zod-openapi@6.0.2', 'zod@4.6.7']);
+    expect(result.summary.prod).toBe(prod.length);
+    expect(result.summary.dev).toBe(result.entries.length - prod.length);
   });
 
   it('0 禁止、0 未知、0 游离条目', () => {

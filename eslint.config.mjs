@@ -59,6 +59,11 @@ function prefixGroups(prefix) {
 
 const boundary = new Map();
 
+// 入向白名单（`inbound.default = "deny"`）要对**全部**真实单元生效，所以这里先把
+// apps/* 与 packages/* 列盘。与 check-dependency-graph.mjs 的 discoverUnits 同一套发现方式：
+// 新增一个单元即自动被约束，不需要回来补 ESLint 配置。
+const ALL_UNIT_DIRS = ['apps', 'packages'].flatMap((group) => expandUnitGlob(`${group}/*`));
+
 function addRestriction(unitDir, kind, key, message) {
   const entry = boundary.get(unitDir) ?? { paths: new Map(), patterns: new Map() };
   boundary.set(unitDir, entry);
@@ -85,6 +90,19 @@ for (const rule of graph.rules) {
         if (name) addRestriction(unitDir, 'path', name, message);
         addRestriction(unitDir, 'pattern', `**/${target}/**`, message);
       }
+    }
+  }
+
+  // 入向白名单：把「谁可以依赖我」翻译成每个非白名单单元的 no-restricted-imports。
+  // 目标单元尚未落地时不生成任何规则 —— 与 check-dependency-graph.mjs 的行为一致。
+  const inbound = rule.inbound;
+  if (inbound?.default === 'deny' && unitExists(inbound.targetUnit)) {
+    const allowed = new Set(inbound.allowFrom ?? []);
+    const name = unitPackageName(inbound.targetUnit);
+    for (const unitDir of ALL_UNIT_DIRS) {
+      if (unitDir === inbound.targetUnit || allowed.has(unitDir)) continue;
+      if (name) addRestriction(unitDir, 'path', name, message);
+      addRestriction(unitDir, 'pattern', `**/${inbound.targetUnit}/**`, message);
     }
   }
 }

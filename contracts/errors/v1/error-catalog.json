@@ -1,0 +1,468 @@
+{
+  "apiMajor": 1,
+  "codes": [
+    {
+      "code": "ACCOUNT_LOCKED",
+      "httpStatus": 423,
+      "messageKey": "auth.account.locked",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "ACTIVE_WRITE_TASK_EXISTS",
+      "httpStatus": 409,
+      "messageKey": "task.activeWrite.exists",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "AGENT_FAILED",
+      "httpStatus": 502,
+      "messageKey": "agent.run.failed",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "ARTIFACT_INCOMPLETE",
+      "httpStatus": 502,
+      "messageKey": "artifact.incomplete",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "ARTIFACT_MISSING",
+      "httpStatus": 502,
+      "messageKey": "artifact.missing",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "AUTHENTICATION_FAILED",
+      "httpStatus": 401,
+      "messageKey": "auth.failed",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "AUTHENTICATION_REQUIRED",
+      "httpStatus": 401,
+      "messageKey": "auth.required",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "BAILIAN_CREDENTIAL_INVALID",
+      "httpStatus": 422,
+      "messageKey": "media.credential.invalid",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "BAILIAN_CREDENTIAL_NOT_CONFIGURED",
+      "httpStatus": 422,
+      "messageKey": "media.credential.missing",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "BAILIAN_QUOTA_EXHAUSTED",
+      "httpStatus": 429,
+      "messageKey": "media.energy.empty",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "BAILIAN_UNREACHABLE",
+      "httpStatus": 503,
+      "messageKey": "media.connection.unavailable",
+      "retryable": true,
+      "sameRequestRetrySafety": "REQUIRES_IDEMPOTENCY_KEY"
+    },
+    {
+      "code": "BUILD_FAILED",
+      "httpStatus": 422,
+      "messageKey": "work.build.failed",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "CONTENT_REJECTED",
+      "httpStatus": 422,
+      "messageKey": "content.rejected",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "CSRF_REJECTED",
+      "httpStatus": 403,
+      "messageKey": "auth.csrfRejected",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "DEPENDENCY_UNAVAILABLE",
+      "httpStatus": 503,
+      "messageKey": "system.dependency.unavailable",
+      "retryable": true,
+      "sameRequestRetrySafety": "REQUIRES_IDEMPOTENCY_KEY"
+    },
+    {
+      "code": "FORBIDDEN_CAPABILITY",
+      "httpStatus": 403,
+      "messageKey": "auth.capability.forbidden",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "GROUP_ARCHIVED",
+      "httpStatus": 409,
+      "messageKey": "group.archived",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "GROUP_MEMBER_LIMIT_REACHED",
+      "httpStatus": 409,
+      "messageKey": "group.memberLimit.reached",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "IDEMPOTENCY_KEY_REQUIRED",
+      "httpStatus": 400,
+      "messageKey": "request.idempotencyKey.required",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "IDEMPOTENCY_KEY_REUSED",
+      "httpStatus": 409,
+      "messageKey": "request.idempotencyKey.reused",
+      "retryable": false,
+      "sameRequestRetrySafety": "UNSAFE"
+    },
+    {
+      "code": "INTERNAL_ERROR",
+      "httpStatus": 500,
+      "messageKey": "system.unavailable",
+      "retryable": false,
+      "sameRequestRetrySafety": "UNSAFE"
+    },
+    {
+      "code": "LOGIN_NAME_CONFLICT",
+      "httpStatus": 409,
+      "messageKey": "account.loginName.conflict",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "PUBLICATION_IN_PROGRESS",
+      "httpStatus": 409,
+      "messageKey": "publication.inProgress",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "QCA_CREDENTIAL_INVALID",
+      "httpStatus": 422,
+      "messageKey": "agent.credential.invalid",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "QCA_CREDENTIAL_NOT_CONFIGURED",
+      "httpStatus": 422,
+      "messageKey": "agent.credential.missing",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "QCA_QUOTA_EXHAUSTED",
+      "httpStatus": 429,
+      "messageKey": "agent.energy.empty",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "QCA_UNREACHABLE",
+      "httpStatus": 503,
+      "messageKey": "agent.connection.unavailable",
+      "retryable": true,
+      "sameRequestRetrySafety": "REQUIRES_IDEMPOTENCY_KEY"
+    },
+    {
+      "code": "RATE_LIMITED",
+      "httpStatus": 429,
+      "messageKey": "request.rateLimited",
+      "retryable": true,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "REQUEST_INVALID",
+      "httpStatus": 400,
+      "messageKey": "request.invalid",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "RESOURCE_NOT_FOUND",
+      "httpStatus": 404,
+      "messageKey": "resource.notFound",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "REVISION_CONFLICT",
+      "httpStatus": 409,
+      "messageKey": "resource.revisionConflict",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "SECRET_IMMUTABLE_REDEPLOY_REQUIRED",
+      "httpStatus": 409,
+      "messageKey": "secret.immutable.redeployRequired",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "SECRET_KIND_UNSUPPORTED",
+      "httpStatus": 400,
+      "messageKey": "secret.kind.unsupported",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "TASK_NOT_CANCELLABLE",
+      "httpStatus": 409,
+      "messageKey": "task.cancel.notAllowed",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "TASK_NOT_RETRYABLE",
+      "httpStatus": 409,
+      "messageKey": "task.retry.notAllowed",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "TASK_TIMEOUT",
+      "httpStatus": 504,
+      "messageKey": "task.timeout",
+      "retryable": false,
+      "sameRequestRetrySafety": "REQUIRES_IDEMPOTENCY_KEY"
+    },
+    {
+      "code": "USAGE_LIMIT_EXCEEDED",
+      "httpStatus": 429,
+      "messageKey": "usage.limit.exceeded",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "USER_CANCELLED",
+      "httpStatus": 409,
+      "messageKey": "task.cancelled",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "VERSION_NOT_PREVIEWABLE",
+      "httpStatus": 422,
+      "messageKey": "version.preview.notAvailable",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "VERSION_NOT_PUBLISHABLE",
+      "httpStatus": 422,
+      "messageKey": "version.publish.notAllowed",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "VERSION_NOT_RESTORABLE",
+      "httpStatus": 409,
+      "messageKey": "version.restore.notAllowed",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    },
+    {
+      "code": "WORK_CONTRACT_BLOCKED",
+      "httpStatus": 422,
+      "messageKey": "work.contract.blocked",
+      "retryable": false,
+      "sameRequestRetrySafety": "SAFE"
+    }
+  ],
+  "taskErrorRegistry": {
+    "BAILIAN_IMAGE": {
+      "AUTH": [
+        "BAILIAN_CREDENTIAL_NOT_CONFIGURED",
+        "BAILIAN_CREDENTIAL_INVALID"
+      ],
+      "CANCEL": [
+        "USER_CANCELLED"
+      ],
+      "CONTENT": [
+        "CONTENT_REJECTED"
+      ],
+      "DEPENDENCY": [
+        "DEPENDENCY_UNAVAILABLE"
+      ],
+      "INTERNAL": [
+        "INTERNAL_ERROR"
+      ],
+      "QUOTA": [
+        "BAILIAN_QUOTA_EXHAUSTED"
+      ],
+      "TIMEOUT": [
+        "TASK_TIMEOUT"
+      ],
+      "TRANSPORT": [
+        "BAILIAN_UNREACHABLE"
+      ]
+    },
+    "PUBLISH": {
+      "BUILD": [
+        "BUILD_FAILED"
+      ],
+      "CANCEL": [
+        "USER_CANCELLED"
+      ],
+      "CONTENT": [
+        "CONTENT_REJECTED"
+      ],
+      "CONTRACT": [
+        "WORK_CONTRACT_BLOCKED"
+      ],
+      "DEPENDENCY": [
+        "DEPENDENCY_UNAVAILABLE"
+      ],
+      "INTERNAL": [
+        "INTERNAL_ERROR"
+      ],
+      "TIMEOUT": [
+        "TASK_TIMEOUT"
+      ]
+    },
+    "RESCAN": {
+      "BUILD": [
+        "BUILD_FAILED"
+      ],
+      "CANCEL": [
+        "USER_CANCELLED"
+      ],
+      "CONTENT": [
+        "CONTENT_REJECTED"
+      ],
+      "CONTRACT": [
+        "WORK_CONTRACT_BLOCKED"
+      ],
+      "DEPENDENCY": [
+        "DEPENDENCY_UNAVAILABLE"
+      ],
+      "INTERNAL": [
+        "INTERNAL_ERROR"
+      ],
+      "TIMEOUT": [
+        "TASK_TIMEOUT"
+      ]
+    },
+    "STT": {
+      "AUTH": [
+        "BAILIAN_CREDENTIAL_NOT_CONFIGURED",
+        "BAILIAN_CREDENTIAL_INVALID"
+      ],
+      "CANCEL": [
+        "USER_CANCELLED"
+      ],
+      "CONTENT": [
+        "CONTENT_REJECTED"
+      ],
+      "DEPENDENCY": [
+        "DEPENDENCY_UNAVAILABLE"
+      ],
+      "INTERNAL": [
+        "INTERNAL_ERROR"
+      ],
+      "QUOTA": [
+        "BAILIAN_QUOTA_EXHAUSTED"
+      ],
+      "TIMEOUT": [
+        "TASK_TIMEOUT"
+      ],
+      "TRANSPORT": [
+        "BAILIAN_UNREACHABLE"
+      ]
+    },
+    "TTS": {
+      "AUTH": [
+        "BAILIAN_CREDENTIAL_NOT_CONFIGURED",
+        "BAILIAN_CREDENTIAL_INVALID"
+      ],
+      "CANCEL": [
+        "USER_CANCELLED"
+      ],
+      "CONTENT": [
+        "CONTENT_REJECTED"
+      ],
+      "DEPENDENCY": [
+        "DEPENDENCY_UNAVAILABLE"
+      ],
+      "INTERNAL": [
+        "INTERNAL_ERROR"
+      ],
+      "QUOTA": [
+        "BAILIAN_QUOTA_EXHAUSTED"
+      ],
+      "TIMEOUT": [
+        "TASK_TIMEOUT"
+      ],
+      "TRANSPORT": [
+        "BAILIAN_UNREACHABLE"
+      ]
+    },
+    "VIBE_TURN": {
+      "AGENT_RUN": [
+        "AGENT_FAILED"
+      ],
+      "AUTH": [
+        "QCA_CREDENTIAL_NOT_CONFIGURED",
+        "QCA_CREDENTIAL_INVALID"
+      ],
+      "BUILD": [
+        "BUILD_FAILED"
+      ],
+      "CANCEL": [
+        "USER_CANCELLED"
+      ],
+      "COLLECT": [
+        "ARTIFACT_MISSING",
+        "ARTIFACT_INCOMPLETE"
+      ],
+      "CONTENT": [
+        "CONTENT_REJECTED"
+      ],
+      "CONTRACT": [
+        "WORK_CONTRACT_BLOCKED"
+      ],
+      "DEPENDENCY": [
+        "DEPENDENCY_UNAVAILABLE"
+      ],
+      "INTERNAL": [
+        "INTERNAL_ERROR"
+      ],
+      "QUOTA": [
+        "QCA_QUOTA_EXHAUSTED"
+      ],
+      "TIMEOUT": [
+        "TASK_TIMEOUT"
+      ],
+      "TRANSPORT": [
+        "QCA_UNREACHABLE"
+      ]
+    }
+  }
+}

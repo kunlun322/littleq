@@ -1,0 +1,4524 @@
+{
+  "components": {
+    "schemas": {
+      "AccountStatus": {
+        "enum": [
+          "ACTIVE",
+          "LOCKED",
+          "DELETED"
+        ],
+        "type": "string"
+      },
+      "AgeBand": {
+        "enum": [
+          "L1",
+          "L2",
+          "L3"
+        ],
+        "type": "string"
+      },
+      "Attempt": {
+        "maximum": 9007199254740991,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "BatchCreateStudentFailure": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "index": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "messageKey": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "index",
+          "messageKey"
+        ],
+        "type": "object"
+      },
+      "BatchCreateStudentsRequest": {
+        "properties": {
+          "students": {
+            "items": {
+              "$ref": "#/components/schemas/StudentCreateItem"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "students"
+        ],
+        "type": "object"
+      },
+      "BatchCreateStudentsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/BatchCreateStudentFailure"
+            },
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchCreatedStudent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "failed",
+          "items"
+        ],
+        "type": "object"
+      },
+      "BatchCreatedStudent": {
+        "additionalProperties": false,
+        "properties": {
+          "initialPassword": {
+            "$ref": "#/components/schemas/InitialPassword"
+          },
+          "student": {
+            "$ref": "#/components/schemas/StudentSummary"
+          }
+        },
+        "required": [
+          "initialPassword",
+          "student"
+        ],
+        "type": "object"
+      },
+      "BuildStatus": {
+        "enum": [
+          "VALID",
+          "INVALID"
+        ],
+        "type": "string"
+      },
+      "Capability": {
+        "enum": [
+          "QCA_TASK",
+          "IMAGE_GENERATION",
+          "TTS",
+          "STT"
+        ],
+        "type": "string"
+      },
+      "ContractVersion": {
+        "description": "语义化版本，形如 1.4.0。",
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "type": "string"
+      },
+      "CreateGroupRequest": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/GroupKind"
+          },
+          "name": {
+            "$ref": "#/components/schemas/GroupName"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/GroupSettings"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "settings"
+        ],
+        "type": "object"
+      },
+      "CreatePreviewRequest": {
+        "properties": {
+          "versionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CreatePreviewResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "url": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "versionId": {
+            "$ref": "#/components/schemas/UuidV7"
+          }
+        },
+        "required": [
+          "expiresAt",
+          "url",
+          "versionId"
+        ],
+        "type": "object"
+      },
+      "CreateProjectRequest": {
+        "properties": {
+          "ageBand": {
+            "$ref": "#/components/schemas/AgeBand"
+          },
+          "helpLevel": {
+            "$ref": "#/components/schemas/HelpLevel"
+          },
+          "templateId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "$ref": "#/components/schemas/ProjectTitle"
+          },
+          "workType": {
+            "$ref": "#/components/schemas/WorkType"
+          }
+        },
+        "required": [
+          "ageBand",
+          "helpLevel",
+          "title",
+          "workType"
+        ],
+        "type": "object"
+      },
+      "CreateTurnRequest": {
+        "properties": {
+          "baseRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "baseVersionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/Prompt"
+          }
+        },
+        "required": [
+          "baseRevision",
+          "prompt"
+        ],
+        "type": "object"
+      },
+      "Credits": {
+        "minimum": 0,
+        "type": "number"
+      },
+      "Cursor": {
+        "description": "不透明 base64url 分页游标。排序键编码在其中。",
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "type": "string"
+      },
+      "DurationMs": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "ErrorEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "messageKey": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "traceId": {
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "messageKey",
+          "retryable",
+          "traceId"
+        ],
+        "type": "object"
+      },
+      "GetProjectResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "activeTask": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currentVersion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectVersion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          }
+        },
+        "required": [
+          "activeTask",
+          "currentVersion",
+          "project"
+        ],
+        "type": "object"
+      },
+      "Group": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "id": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GroupKind"
+          },
+          "name": {
+            "$ref": "#/components/schemas/GroupName"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/GroupSettingsOutput"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GroupStatus"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "createdAt",
+          "id",
+          "kind",
+          "name",
+          "revision",
+          "settings",
+          "status",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "GroupKind": {
+        "enum": [
+          "FAMILY",
+          "CLASS"
+        ],
+        "type": "string"
+      },
+      "GroupName": {
+        "maxLength": 80,
+        "minLength": 1,
+        "type": "string"
+      },
+      "GroupPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Group"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Cursor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "GroupSettings": {
+        "properties": {
+          "memberLimit": {
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "studentPeerViewEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "memberLimit",
+          "studentPeerViewEnabled"
+        ],
+        "type": "object"
+      },
+      "GroupSettingsOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "memberLimit": {
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "studentPeerViewEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "memberLimit",
+          "studentPeerViewEnabled"
+        ],
+        "type": "object"
+      },
+      "GroupStatus": {
+        "enum": [
+          "ACTIVE",
+          "ARCHIVED"
+        ],
+        "type": "string"
+      },
+      "HelpLevel": {
+        "enum": [
+          "LV1",
+          "LV2",
+          "LV3"
+        ],
+        "type": "string"
+      },
+      "IdempotencyKey": {
+        "description": "16–128 个 ASCII 字符，字符集 [A-Za-z0-9._:-]。",
+        "maxLength": 128,
+        "minLength": 16,
+        "pattern": "^[A-Za-z0-9._:-]+$",
+        "type": "string"
+      },
+      "IfMatch": {
+        "description": "强校验 ETag，形如 \"rev-3\"。不匹配映射 REVISION_CONFLICT。",
+        "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+        "type": "string"
+      },
+      "IfNoneMatch": {
+        "description": "ETag 或 *。命中时读取接口返回 304。",
+        "pattern": "^(?:\\*|\"rev-(?:0|[1-9][0-9]*)\")$",
+        "type": "string"
+      },
+      "InitialPassword": {
+        "description": "8..128 字符。只随创建响应返回一次。",
+        "maxLength": 128,
+        "minLength": 8,
+        "type": "string"
+      },
+      "LedgerCsv": {
+        "description": "RFC 4180 CSV。首行表头，列固定为：capability, durationMs, estimatedCredits, id, modelId, occurredAt, provider, providerReportedCredits, quantity, subjectUserId, taskId, unit。与 JSON 导出同一 allowlist 字段。",
+        "type": "string"
+      },
+      "LedgerExportFormat": {
+        "default": "json",
+        "description": "导出格式，缺省 json。csv 分支与 json 是同一 allowlist 字段，并额外带 Content-Disposition。",
+        "enum": [
+          "json",
+          "csv"
+        ],
+        "type": "string"
+      },
+      "LedgerLimit": {
+        "default": 100,
+        "description": "1..500，默认 100。",
+        "maximum": 500,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "LicenseInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "commit": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "license": {
+            "const": "AGPL-3.0-only",
+            "type": "string"
+          },
+          "sourceUrl": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/components/schemas/ContractVersion"
+          }
+        },
+        "required": [
+          "commit",
+          "license",
+          "sourceUrl",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ListLimit": {
+        "default": 20,
+        "description": "1..100，默认 20。",
+        "maximum": 100,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "LiveHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "const": "ok",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "LoginName": {
+        "maxLength": 64,
+        "minLength": 1,
+        "type": "string"
+      },
+      "LoginRequest": {
+        "properties": {
+          "loginName": {
+            "$ref": "#/components/schemas/LoginName"
+          },
+          "password": {
+            "$ref": "#/components/schemas/Password"
+          },
+          "rememberMe": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "loginName",
+          "password"
+        ],
+        "type": "object"
+      },
+      "Nickname": {
+        "maxLength": 64,
+        "minLength": 1,
+        "type": "string"
+      },
+      "NonNegativeCount": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "OpenGraph": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 300,
+            "type": "string"
+          },
+          "imageUrl": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "$ref": "#/components/schemas/WorkTitle"
+          }
+        },
+        "required": [
+          "description",
+          "imageUrl",
+          "title"
+        ],
+        "type": "object"
+      },
+      "OperatorNote": {
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string"
+      },
+      "Password": {
+        "description": "8..128 字符，不含控制字符。",
+        "maxLength": 128,
+        "minLength": 8,
+        "type": "string"
+      },
+      "Progress": {
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "Project": {
+        "additionalProperties": false,
+        "properties": {
+          "ageBand": {
+            "$ref": "#/components/schemas/AgeBand"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "currentVersionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "helpLevel": {
+            "$ref": "#/components/schemas/HelpLevel"
+          },
+          "id": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "lastOpenedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ownerStudentId": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectStatus"
+          },
+          "templateId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "$ref": "#/components/schemas/ProjectTitle"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "workType": {
+            "$ref": "#/components/schemas/WorkType"
+          }
+        },
+        "required": [
+          "ageBand",
+          "createdAt",
+          "currentVersionId",
+          "helpLevel",
+          "id",
+          "lastOpenedAt",
+          "ownerStudentId",
+          "revision",
+          "status",
+          "templateId",
+          "title",
+          "updatedAt",
+          "workType"
+        ],
+        "type": "object"
+      },
+      "ProjectPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Project"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Cursor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "ProjectStatus": {
+        "enum": [
+          "ACTIVE",
+          "ARCHIVED",
+          "DELETED"
+        ],
+        "type": "string"
+      },
+      "ProjectTitle": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+      },
+      "ProjectVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactSha256": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "buildStatus": {
+            "$ref": "#/components/schemas/BuildStatus"
+          },
+          "contractVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "fileCount": {
+            "$ref": "#/components/schemas/NonNegativeCount"
+          },
+          "id": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "parentVersionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "safeScanSummary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SafeScanSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scanStatus": {
+            "$ref": "#/components/schemas/ScanStatus"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/VersionSequence"
+          },
+          "sourceTaskId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "totalBytes": {
+            "$ref": "#/components/schemas/NonNegativeCount"
+          }
+        },
+        "required": [
+          "artifactSha256",
+          "buildStatus",
+          "contractVersion",
+          "createdAt",
+          "createdBy",
+          "fileCount",
+          "id",
+          "parentVersionId",
+          "projectId",
+          "safeScanSummary",
+          "scanStatus",
+          "sequence",
+          "sourceTaskId",
+          "totalBytes"
+        ],
+        "type": "object"
+      },
+      "ProjectVersionPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectVersion"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Cursor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "Prompt": {
+        "description": "1..8000 字符。快照与测试夹具中不出现任何真实学生输入。",
+        "maxLength": 8000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "PublicWork": {
+        "additionalProperties": false,
+        "properties": {
+          "authorNickname": {
+            "$ref": "#/components/schemas/Nickname"
+          },
+          "commentsEnabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "og": {
+            "$ref": "#/components/schemas/OpenGraph"
+          },
+          "runtimeUrl": {
+            "maxLength": 512,
+            "type": "string"
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Slug"
+          },
+          "title": {
+            "$ref": "#/components/schemas/WorkTitle"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "authorNickname",
+          "commentsEnabled",
+          "id",
+          "og",
+          "runtimeUrl",
+          "slug",
+          "title",
+          "visibility"
+        ],
+        "type": "object"
+      },
+      "PublishProjectRequest": {
+        "properties": {
+          "commentsEnabled": {
+            "type": "boolean"
+          },
+          "versionId": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "commentsEnabled",
+          "versionId",
+          "visibility"
+        ],
+        "type": "object"
+      },
+      "PublishProjectResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "publicationTaskId": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        },
+        "required": [
+          "publicationTaskId",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "PutSecretRequest": {
+        "properties": {
+          "value": {
+            "$ref": "#/components/schemas/SecretValue"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "PutUsageLimitRequest": {
+        "properties": {
+          "capability": {
+            "$ref": "#/components/schemas/Capability"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "limitUnits": {
+            "$ref": "#/components/schemas/UsageQuantity"
+          },
+          "period": {
+            "$ref": "#/components/schemas/UsagePeriod"
+          },
+          "subjectUserId": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "timezone": {
+            "$ref": "#/components/schemas/Timezone"
+          }
+        },
+        "required": [
+          "capability",
+          "enabled",
+          "limitUnits",
+          "period",
+          "subjectUserId",
+          "timezone"
+        ],
+        "type": "object"
+      },
+      "ReadyHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "const": "ready",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "RestoreProjectVersionRequest": {
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/OperatorNote"
+          }
+        },
+        "type": "object"
+      },
+      "RestoreProjectVersionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "projectRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "version": {
+            "$ref": "#/components/schemas/ProjectVersion"
+          }
+        },
+        "required": [
+          "projectRevision",
+          "version"
+        ],
+        "type": "object"
+      },
+      "RetryTaskRequest": {
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/OperatorNote"
+          }
+        },
+        "type": "object"
+      },
+      "Revision": {
+        "description": "非负十进制字符串。同时充当 ETag 的比较基准。",
+        "pattern": "^(?:0|[1-9][0-9]*)$",
+        "type": "string"
+      },
+      "SafeScanSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "blockedCount": {
+            "$ref": "#/components/schemas/NonNegativeCount"
+          },
+          "confirmRequiredCount": {
+            "$ref": "#/components/schemas/NonNegativeCount"
+          },
+          "reportRef": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scannedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "warningCount": {
+            "$ref": "#/components/schemas/NonNegativeCount"
+          }
+        },
+        "required": [
+          "blockedCount",
+          "confirmRequiredCount",
+          "reportRef",
+          "scannedAt",
+          "warningCount"
+        ],
+        "type": "object"
+      },
+      "ScanStatus": {
+        "enum": [
+          "PASS",
+          "BLOCK",
+          "CONFIRM_REQUIRED"
+        ],
+        "type": "string"
+      },
+      "SecretKind": {
+        "enum": [
+          "QCA_PAT",
+          "BAILIAN_API_KEY"
+        ],
+        "type": "string"
+      },
+      "SecretMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SecretKind"
+          },
+          "lastRotatedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "configured",
+          "kind",
+          "lastRotatedAt"
+        ],
+        "type": "object"
+      },
+      "SecretValue": {
+        "description": "1..8192 字符，不含控制字符。永不回显。",
+        "maxLength": 8192,
+        "minLength": 1,
+        "type": "string"
+      },
+      "Sha256": {
+        "description": "小写 SHA-256 十六进制摘要（64 字符）。",
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "Slug": {
+        "description": "公开访问路径片段：小写字母、数字与连字符，3..80。",
+        "pattern": "^[a-z0-9-]{3,80}$",
+        "type": "string"
+      },
+      "StudentCreateItem": {
+        "properties": {
+          "ageBand": {
+            "$ref": "#/components/schemas/AgeBand"
+          },
+          "initialPassword": {
+            "$ref": "#/components/schemas/InitialPassword"
+          },
+          "loginName": {
+            "$ref": "#/components/schemas/LoginName"
+          },
+          "nickname": {
+            "$ref": "#/components/schemas/Nickname"
+          }
+        },
+        "required": [
+          "ageBand",
+          "loginName",
+          "nickname"
+        ],
+        "type": "object"
+      },
+      "StudentSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "ageBand": {
+            "$ref": "#/components/schemas/AgeBand"
+          },
+          "id": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "loginName": {
+            "$ref": "#/components/schemas/LoginName"
+          },
+          "nickname": {
+            "$ref": "#/components/schemas/Nickname"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountStatus"
+          }
+        },
+        "required": [
+          "ageBand",
+          "id",
+          "loginName",
+          "nickname",
+          "revision",
+          "status"
+        ],
+        "type": "object"
+      },
+      "Task": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "$ref": "#/components/schemas/Attempt"
+          },
+          "cancelRequestedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hardDeadlineAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TaskKind"
+          },
+          "maxAttempts": {
+            "$ref": "#/components/schemas/Attempt"
+          },
+          "nextRunAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "progress": {
+            "$ref": "#/components/schemas/Progress"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "resultVersionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "softDeadlineAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/TaskState"
+          }
+        },
+        "required": [
+          "attempt",
+          "cancelRequestedAt",
+          "createdAt",
+          "error",
+          "finishedAt",
+          "hardDeadlineAt",
+          "id",
+          "kind",
+          "maxAttempts",
+          "nextRunAt",
+          "progress",
+          "projectId",
+          "resultVersionId",
+          "revision",
+          "softDeadlineAt",
+          "stage",
+          "startedAt",
+          "state"
+        ],
+        "type": "object"
+      },
+      "TaskAccepted": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "taskId": {
+            "$ref": "#/components/schemas/UuidV7"
+          }
+        },
+        "required": [
+          "revision",
+          "taskId"
+        ],
+        "type": "object"
+      },
+      "TaskError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "messageKey": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "messageKey",
+          "retryable"
+        ],
+        "type": "object"
+      },
+      "TaskEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/TaskEventType"
+          },
+          "id": {
+            "$ref": "#/components/schemas/TaskEventId"
+          },
+          "safePayload": {
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/NonNegativeCount"
+          }
+        },
+        "required": [
+          "createdAt",
+          "eventType",
+          "id",
+          "safePayload",
+          "sequence"
+        ],
+        "type": "object"
+      },
+      "TaskEventId": {
+        "description": "单任务内单调递增的正十进制字符串，从 1 开始。",
+        "pattern": "^[1-9][0-9]*$",
+        "type": "string"
+      },
+      "TaskEventType": {
+        "enum": [
+          "STATE_CHANGED",
+          "PROGRESS",
+          "SAFE_MESSAGE",
+          "COMPLETED"
+        ],
+        "type": "string"
+      },
+      "TaskKind": {
+        "enum": [
+          "VIBE_TURN",
+          "BAILIAN_IMAGE",
+          "TTS",
+          "STT",
+          "PUBLISH",
+          "RESCAN"
+        ],
+        "type": "string"
+      },
+      "TaskRetryAccepted": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "$ref": "#/components/schemas/Attempt"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "taskId": {
+            "$ref": "#/components/schemas/UuidV7"
+          }
+        },
+        "required": [
+          "attempt",
+          "revision",
+          "taskId"
+        ],
+        "type": "object"
+      },
+      "TaskStage": {
+        "enum": [
+          "AUTH",
+          "QUOTA",
+          "TRANSPORT",
+          "AGENT_RUN",
+          "COLLECT",
+          "BUILD",
+          "CONTRACT",
+          "CONTENT",
+          "TIMEOUT",
+          "CANCEL",
+          "DEPENDENCY",
+          "INTERNAL"
+        ],
+        "type": "string"
+      },
+      "TaskState": {
+        "enum": [
+          "QUEUED",
+          "CLAIMED",
+          "SESSION_CREATING",
+          "RUNNING",
+          "COLLECTING",
+          "REPAIRING",
+          "VALIDATING",
+          "COMMITTING",
+          "RETRY_WAIT",
+          "CANCELLING",
+          "SUCCEEDED",
+          "FAILED",
+          "BLOCKED",
+          "CANCELLED",
+          "TIMED_OUT"
+        ],
+        "type": "string"
+      },
+      "Timestamp": {
+        "description": "UTC RFC3339 时间戳，以 Z 结尾。",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+        "type": "string"
+      },
+      "Timezone": {
+        "description": "IANA 时区名，Area/Location 形状，例如 Asia/Shanghai。",
+        "maxLength": 64,
+        "pattern": "^[A-Za-z][A-Za-z0-9+_./-]*(?:\\/[A-Za-z0-9+._-]+)+$",
+        "type": "string"
+      },
+      "UpdateWorkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "commentsEnabled": {
+            "type": "boolean"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "type": "object"
+      },
+      "UsageLedgerEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "$ref": "#/components/schemas/Capability"
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DurationMs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimatedCredits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "modelId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/UsageProvider"
+          },
+          "providerReportedCredits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/UsageQuantity"
+          },
+          "subjectUserId": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "$ref": "#/components/schemas/UsageUnit"
+          }
+        },
+        "required": [
+          "capability",
+          "durationMs",
+          "estimatedCredits",
+          "id",
+          "modelId",
+          "occurredAt",
+          "provider",
+          "providerReportedCredits",
+          "quantity",
+          "subjectUserId",
+          "taskId",
+          "unit"
+        ],
+        "type": "object"
+      },
+      "UsageLedgerPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UsageLedgerEntry"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Cursor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "UsageLimit": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "$ref": "#/components/schemas/Capability"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "limitUnits": {
+            "$ref": "#/components/schemas/UsageQuantity"
+          },
+          "period": {
+            "$ref": "#/components/schemas/UsagePeriod"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "subjectUserId": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "timezone": {
+            "$ref": "#/components/schemas/Timezone"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "capability",
+          "enabled",
+          "id",
+          "limitUnits",
+          "period",
+          "revision",
+          "subjectUserId",
+          "timezone",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "UsageLimitPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UsageLimit"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Cursor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "UsagePeriod": {
+        "enum": [
+          "DAILY",
+          "MONTHLY"
+        ],
+        "type": "string"
+      },
+      "UsageProvider": {
+        "enum": [
+          "QCA",
+          "BAILIAN"
+        ],
+        "type": "string"
+      },
+      "UsageQuantity": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "UsageUnit": {
+        "enum": [
+          "CREDIT",
+          "IMAGE",
+          "CHARACTER",
+          "SECOND"
+        ],
+        "type": "string"
+      },
+      "UuidV7": {
+        "description": "小写 UUIDv7。",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "type": "string"
+      },
+      "VersionSequence": {
+        "maximum": 9007199254740991,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "Visibility": {
+        "enum": [
+          "PRIVATE",
+          "GROUP",
+          "PUBLIC"
+        ],
+        "type": "string"
+      },
+      "Work": {
+        "additionalProperties": false,
+        "properties": {
+          "commentsEnabled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "id": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "latestPublicationId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UuidV7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/UuidV7"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Slug"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkStatus"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "commentsEnabled",
+          "createdAt",
+          "id",
+          "latestPublicationId",
+          "projectId",
+          "revision",
+          "slug",
+          "status",
+          "updatedAt",
+          "visibility"
+        ],
+        "type": "object"
+      },
+      "WorkStatus": {
+        "enum": [
+          "ACTIVE",
+          "DELETED"
+        ],
+        "type": "string"
+      },
+      "WorkTitle": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+      },
+      "WorkType": {
+        "enum": [
+          "GAME",
+          "WEB",
+          "ANIMATION",
+          "PICTURE_BOOK"
+        ],
+        "type": "string"
+      }
+    },
+    "securitySchemes": {
+      "CookieAuth": {
+        "description": "Secure HttpOnly 会话 cookie。契约声明 cookie 名，绝不声明 cookie 值。",
+        "in": "cookie",
+        "name": "littleq_session",
+        "type": "apiKey"
+      },
+      "CsrfHeader": {
+        "description": "双提交 CSRF token。与会话 cookie 位于同一 Security Requirement Object 时表示 AND。",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "LittleQ 对外 HTTP 契约。事实源是 packages/api-contract 里的 Zod DTO 与 operationRegistry，本文档由它单向派生，不得反向生成类型。",
+    "license": {
+      "identifier": "AGPL-3.0-only",
+      "name": "AGPL-3.0-only"
+    },
+    "title": "LittleQ API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "description": "成功返回 204 与 Set-Cookie，**没有响应体**：把用户对象返回给登录者会顺带把角色、锁定策略等只属于服务端判断的字段带出去（§5.3 要求角色判断留在服务端）。匿名接口，因此不带 CSRF —— 此时还没有会话可保护。",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "description": "登录凭据。",
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "登录成功，会话 cookie 已下发。",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Secure HttpOnly 会话 cookie。契约只声明形状，不含任何示例值。",
+                "required": true,
+                "schema": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_FAILED。"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：ACCOUNT_LOCKED。"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RATE_LIMITED。",
+            "headers": {
+              "Retry-After": {
+                "description": "delta-seconds。429（RATE_LIMITED 与各类额度耗尽）必须携带。",
+                "required": true,
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "用登录名与口令建立会话。",
+        "tags": [
+          "auth"
+        ],
+        "x-littleq-error-codes": [
+          "ACCOUNT_LOCKED",
+          "AUTHENTICATION_FAILED",
+          "RATE_LIMITED",
+          "REQUEST_INVALID"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "description": "靠 cookie 识别会话，因此没有请求体，也没有 path/query 参数 —— 这也是它**不挂 `REQUEST_INVALID`** 的原因：没有任何输入可以校验。清 cookie 通过 Set-Cookie 完成。",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "会话已结束，cookie 已清除。",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Secure HttpOnly 会话 cookie。契约只声明形状，不含任何示例值。",
+                "required": true,
+                "schema": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "结束当前会话。",
+        "tags": [
+          "auth"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED"
+        ]
+      }
+    },
+    "/groups": {
+      "get": {
+        "description": "scope 由服务端按角色固定，不接受调用方传入 owner 参数：§5.3 要求查询**先带 scope**，禁止「查出后再判断」。`membership` 不在列表读模型里，成员清单由 batchCreateStudents 与后续专门接口负责。",
+        "operationId": "listGroups",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "$ref": "#/components/schemas/Cursor"
+            }
+          },
+          {
+            "description": "1..100，默认 20。",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "$ref": "#/components/schemas/ListLimit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "$ref": "#/components/schemas/GroupStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupPage"
+                }
+              }
+            },
+            "description": "小组分页。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "分页列出当前用户可见的小组。",
+        "tags": [
+          "groups"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "REQUEST_INVALID"
+        ]
+      },
+      "post": {
+        "description": "`memberLimit` 没有默认值（附录 A §6.3：domain 不硬编码默认值），因此请求体必须显式给出。Location 指向新建小组，ETag 是其初始 revision。",
+        "operationId": "createGroup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGroupRequest"
+              }
+            }
+          },
+          "description": "小组名称、种类与容量设置。",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            },
+            "description": "小组已创建。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "description": "新建资源或异步任务的相对 URL。",
+                "required": true,
+                "schema": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED, FORBIDDEN_CAPABILITY。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "创建小组。",
+        "tags": [
+          "groups"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID"
+        ]
+      }
+    },
+    "/groups/{id}/students:batch": {
+      "post": {
+        "description": "事务策略是**逐项结果**（§5.4）：`failed[]` 只承载逐项业务校验失败（例如登录名冲突），而权限不足、小组已归档这类**请求级**错误仍然走统一 envelope，不出现在 `failed[]` 里。`initialPassword` 只在这一次响应里出现，之后任何接口都不再返回它（§5.5）。`failed[]` 刻意不回显 loginName / nickname —— 那是儿童 PII，`index` 足以定位到请求里的第几项。",
+        "operationId": "batchCreateStudents",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCreateStudentsRequest"
+              }
+            }
+          },
+          "description": "1..100 个学生条目。上限是事务边界，不是性能调参。",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateStudentsResponse"
+                }
+              }
+            },
+            "description": "批量创建结果：成功项与逐项失败项。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED, FORBIDDEN_CAPABILITY。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：GROUP_ARCHIVED, GROUP_MEMBER_LIMIT_REACHED, LOGIN_NAME_CONFLICT。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "在小组内批量创建学生账号。",
+        "tags": [
+          "groups"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "FORBIDDEN_CAPABILITY",
+          "GROUP_ARCHIVED",
+          "GROUP_MEMBER_LIMIT_REACHED",
+          "LOGIN_NAME_CONFLICT",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND"
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "description": "**不探测任何依赖**（§5.4）：进程能应答就是 ok。把数据库或 provider 探活放进 live 探针，会让一次依赖抖动变成整个部署被重启。错误码集合同样为空。",
+        "operationId": "getLiveHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveHealth"
+                }
+              }
+            },
+            "description": "进程存活。"
+          }
+        },
+        "security": [],
+        "summary": "存活探针。",
+        "tags": [
+          "platform"
+        ],
+        "x-littleq-error-codes": []
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "依赖不可用时返回 503 与统一错误 envelope，专属码 `DEPENDENCY_UNAVAILABLE`（它是本 registry 里**唯一**显式声明这个码的地方 —— §5.4 规定它永不隐式挂载）。不返回依赖的原始错误体，因此 200 分支只有 `status` 一个字段：多一个「哪个依赖挂了」就是把内部拓扑暴露给匿名调用者。",
+        "operationId": "getReadyHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyHealth"
+                }
+              }
+            },
+            "description": "依赖就绪。"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：DEPENDENCY_UNAVAILABLE。",
+            "headers": {
+              "Retry-After": {
+                "description": "delta-seconds。429（RATE_LIMITED 与各类额度耗尽）必须携带。",
+                "required": true,
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "就绪探针。",
+        "tags": [
+          "platform"
+        ],
+        "x-littleq-error-codes": [
+          "DEPENDENCY_UNAVAILABLE"
+        ]
+      }
+    },
+    "/license": {
+      "get": {
+        "description": "匿名接口（AGPL-3.0-only 的 §13 要求远程用户能取得源码，所以这条必须不需要登录）。没有任何输入，也没有会话要求，因此它的错误码集合是**空的** —— `INTERNAL_ERROR` 与 `DEPENDENCY_UNAVAILABLE` 永不隐式挂载（§5.4）。`commit` 只声明形状（40 位小写十六进制），快照里不出现任何真实 SHA。",
+        "operationId": "getLicense",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseInfo"
+                }
+              }
+            },
+            "description": "部署信息与许可证。"
+          }
+        },
+        "security": [],
+        "summary": "返回部署的版本、commit 与许可证。",
+        "tags": [
+          "platform"
+        ],
+        "x-littleq-error-codes": []
+      }
+    },
+    "/projects": {
+      "get": {
+        "description": "Student 调用时 `ownerStudentId` 由服务端固定为自己的 id，传入的值会被忽略；Owner 才可以按学生过滤（§5.3 的 scope 规则）。",
+        "operationId": "listProjects",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "$ref": "#/components/schemas/Cursor"
+            }
+          },
+          {
+            "description": "1..100，默认 20。",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "$ref": "#/components/schemas/ListLimit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "$ref": "#/components/schemas/ProjectStatus"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ownerStudentId",
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectPage"
+                }
+              }
+            },
+            "description": "项目分页。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "分页列出项目。",
+        "tags": [
+          "projects"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "REQUEST_INVALID"
+        ]
+      },
+      "post": {
+        "description": "`templateId` 可为 null（不从模板创建）。这里用 `.nullable().optional()` 而不是只用 `.nullable()`：请求方向多接受「键缺席」是**放宽**接受集合，按 §4.2 属于非破坏性方向；响应方向则一律 required + nullable（附录 A §6.4）。",
+        "operationId": "createProject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "description": "项目标题、作品类型、年龄 band 与帮助等级。",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "项目已创建。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "description": "新建资源或异步任务的相对 URL。",
+                "required": true,
+                "schema": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED, FORBIDDEN_CAPABILITY。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "创建项目。",
+        "tags": [
+          "projects"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID"
+        ]
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "description": "一次返回项目、当前版本与活动任务，避免编辑器首屏发三个请求。`currentVersion` / `activeTask` 为 null 表示没有；按附录 A §6.4 它们是 required + nullable，所以键一定在。支持 `If-None-Match` 条件读取，命中返回 304。",
+        "operationId": "getProject",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "$ref": "#/components/schemas/IfNoneMatch"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetProjectResponse"
+                }
+              }
+            },
+            "description": "项目聚合视图。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "ETag 命中，内容未变。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "读取项目聚合视图。",
+        "tags": [
+          "projects"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND"
+        ]
+      }
+    },
+    "/projects/{id}/preview": {
+      "post": {
+        "description": "响应里的 `url` 是**短期独立源地址**。契约只声明它是「不超过 512 字符的串」，**不含任何示例值** —— 一个样例签名 URL 就是一份可复用的凭证模板（§5）。可预览的判据与可恢复相同。虽然是 POST，它不改项目状态，但仍按写接口带 CSRF（见文件注释规则 1）。",
+        "operationId": "createPreview",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePreviewRequest"
+              }
+            }
+          },
+          "description": "可选的版本 id；缺省为当前版本。",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePreviewResponse"
+                }
+              }
+            },
+            "description": "预览地址与其有效期。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：VERSION_NOT_PREVIEWABLE。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "为某个版本签发短期预览地址。",
+        "tags": [
+          "projects"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND",
+          "VERSION_NOT_PREVIEWABLE"
+        ]
+      }
+    },
+    "/projects/{id}/publish": {
+      "post": {
+        "description": "同时是幂等写与条件写：`Idempotency-Key` 与 `If-Match` 都必填。可发布的判据比可恢复更严 —— `buildStatus === VALID && scanStatus === PASS`，`CONFIRM_REQUIRED` **不可**发布。发布不覆盖旧 publication（附录 A §6.2：`LIVE → REVOKED`）。",
+        "operationId": "publishProject",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "description": "16–128 个 ASCII 字符，字符集 [A-Za-z0-9._:-]。",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IdempotencyKey"
+            }
+          },
+          {
+            "description": "强校验 ETag，形如 \"rev-3\"。不匹配映射 REVISION_CONFLICT。",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IfMatch"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishProjectRequest"
+              }
+            }
+          },
+          "description": "要发布的版本与可见性设置。",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishProjectResponse"
+                }
+              }
+            },
+            "description": "发布任务已受理。",
+            "headers": {
+              "Location": {
+                "description": "新建资源或异步任务的相对 URL。",
+                "required": true,
+                "schema": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：IDEMPOTENCY_KEY_REQUIRED, REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：IDEMPOTENCY_KEY_REUSED, PUBLICATION_IN_PROGRESS。"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CONTENT_REJECTED, VERSION_NOT_PUBLISHABLE, WORK_CONTRACT_BLOCKED。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "发布某个版本（异步）。",
+        "tags": [
+          "projects"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CONTENT_REJECTED",
+          "CSRF_REJECTED",
+          "IDEMPOTENCY_KEY_REQUIRED",
+          "IDEMPOTENCY_KEY_REUSED",
+          "PUBLICATION_IN_PROGRESS",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND",
+          "VERSION_NOT_PUBLISHABLE",
+          "WORK_CONTRACT_BLOCKED"
+        ]
+      }
+    },
+    "/projects/{id}/turns": {
+      "post": {
+        "description": "幂等写：`Idempotency-Key` 必填（§5.5），重放同一个 key 返回同一个 taskId 与 `IDEMPOTENCY_KEY_REUSED`。响应只有 `taskId` 与新 revision，不回显整个 Task —— 否则 POST 与 `GET /tasks/{id}` 的字段集合必须永远同步，那是两个接口之间的一条隐形耦合。准入判定见附录 A §6.5：全局 10 / 小组 3 是**调度**上限（排队，不拒绝），每个学生与每个项目各 1 个活动写任务才是**创建不变量**（409）。",
+        "operationId": "createTurn",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "description": "16–128 个 ASCII 字符，字符集 [A-Za-z0-9._:-]。",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IdempotencyKey"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTurnRequest"
+              }
+            }
+          },
+          "description": "用户输入与基线版本。",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskAccepted"
+                }
+              }
+            },
+            "description": "任务已受理。",
+            "headers": {
+              "Location": {
+                "description": "新建资源或异步任务的相对 URL。",
+                "required": true,
+                "schema": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：IDEMPOTENCY_KEY_REQUIRED, REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：ACTIVE_WRITE_TASK_EXISTS, IDEMPOTENCY_KEY_REUSED。"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：QCA_CREDENTIAL_NOT_CONFIGURED。"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：USAGE_LIMIT_EXCEEDED。",
+            "headers": {
+              "Retry-After": {
+                "description": "delta-seconds。429（RATE_LIMITED 与各类额度耗尽）必须携带。",
+                "required": true,
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "发起一个生成回合（异步）。",
+        "tags": [
+          "projects"
+        ],
+        "x-littleq-error-codes": [
+          "ACTIVE_WRITE_TASK_EXISTS",
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "IDEMPOTENCY_KEY_REQUIRED",
+          "IDEMPOTENCY_KEY_REUSED",
+          "QCA_CREDENTIAL_NOT_CONFIGURED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND",
+          "USAGE_LIMIT_EXCEEDED"
+        ]
+      }
+    },
+    "/projects/{id}/versions": {
+      "get": {
+        "description": "版本不可变（§6.6），因此列表只有追加，没有更新。`artifactSha256` 是内容摘要，不是下载地址；对象清单与物理位置留在 infra，不出现在契约里。",
+        "operationId": "listProjectVersions",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "$ref": "#/components/schemas/Cursor"
+            }
+          },
+          {
+            "description": "1..100，默认 20。",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "$ref": "#/components/schemas/ListLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectVersionPage"
+                }
+              }
+            },
+            "description": "版本分页。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "分页列出项目版本。",
+        "tags": [
+          "projects"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND"
+        ]
+      }
+    },
+    "/projects/{id}/versions/{v}:restore": {
+      "post": {
+        "description": "路径参数 `{v}` 是**版本的 UUIDv7 id，不是 `sequence`**：`sequence` 只在项目内唯一，而分支恢复之后同一个 sequence 会指向不同内容，用它做 URL 会让已分享/已收藏的地址悄悄换目标。可恢复的判据是 `buildStatus === VALID && scanStatus !== BLOCK`（`CONFIRM_REQUIRED` **可以**恢复，但**不能**发布）。请求体只有可选的 `reason`，因此 `required` 为 false。",
+        "operationId": "restoreProjectVersion",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "v",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "description": "强校验 ETag，形如 \"rev-3\"。不匹配映射 REVISION_CONFLICT。",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IfMatch"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreProjectVersionRequest"
+              }
+            }
+          },
+          "description": "可选的操作说明。",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreProjectVersionResponse"
+                }
+              }
+            },
+            "description": "已恢复，返回新版本与项目的新 revision。",
+            "headers": {
+              "Location": {
+                "description": "新建资源或异步任务的相对 URL。",
+                "required": true,
+                "schema": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：ACTIVE_WRITE_TASK_EXISTS, REVISION_CONFLICT, VERSION_NOT_RESTORABLE。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "把某个历史版本恢复为当前版本。",
+        "tags": [
+          "projects"
+        ],
+        "x-littleq-error-codes": [
+          "ACTIVE_WRITE_TASK_EXISTS",
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND",
+          "REVISION_CONFLICT",
+          "VERSION_NOT_RESTORABLE"
+        ]
+      }
+    },
+    "/public/works/{slug}": {
+      "get": {
+        "description": "§5.3：对不存在、PRIVATE、REVOKED、DELETED **一律**返回 404 与同一机器码。因此 `RESOURCE_NOT_FOUND` 在这里是**专属码**而不是从路径推导 —— 路径参数是 `{slug}` 不是 `{id}`，而这个 404 的语义是「不可公开服务」，比「对象不存在」更宽。SSR 壳可以显示儿童文案，但不得泄露技术原因，所以响应里没有任何区分四种情况的字段。",
+        "operationId": "getPublicWork",
+        "parameters": [
+          {
+            "description": "公开访问路径片段：小写字母、数字与连字符，3..80。",
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicWork"
+                }
+              }
+            },
+            "description": "可公开服务的作品投影。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          }
+        },
+        "security": [],
+        "summary": "匿名读取公开作品。",
+        "tags": [
+          "public"
+        ],
+        "x-littleq-error-codes": [
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND"
+        ]
+      }
+    },
+    "/settings/secrets/{kind}": {
+      "get": {
+        "description": "只返回 kind / configured / lastRotatedAt，**永不返回 value，也不返回 hash**（§5.5）。hash 同样不返回：它能让离线爆破者验证猜测，而「是否已配置」这个布尔值已经满足 UI 的全部需要。",
+        "operationId": "getSecretMetadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SecretKind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMetadata"
+                }
+              }
+            },
+            "description": "秘密元数据。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID, SECRET_KIND_UNSUPPORTED。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：FORBIDDEN_CAPABILITY。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "读取某个 AI 凭证的配置状态。",
+        "tags": [
+          "settings"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID",
+          "SECRET_KIND_UNSUPPORTED"
+        ]
+      },
+      "put": {
+        "description": "成功返回 **204 无 body**：不回显、不返回 hash。这是「秘密值只有入向、没有出向」的结构性保证 —— 服务端没有第二条把明文送出去的路径。v1 不提供删除能力，因此不可变的部署型凭证需要重新部署，映射 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`。",
+        "operationId": "putSecret",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SecretKind"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutSecretRequest"
+              }
+            }
+          },
+          "description": "秘密明文。契约层只约束长度与字符集，不做任何脱敏。",
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "已写入，不回显。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID, SECRET_KIND_UNSUPPORTED。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED, FORBIDDEN_CAPABILITY。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：SECRET_IMMUTABLE_REDEPLOY_REQUIRED。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "写入（轮换）某个 AI 凭证。",
+        "tags": [
+          "settings"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID",
+          "SECRET_IMMUTABLE_REDEPLOY_REQUIRED",
+          "SECRET_KIND_UNSUPPORTED"
+        ]
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "description": "异步失败以 **HTTP 200** 返回，错误在 body 的 `error` 字段里（code / messageKey / retryable）；客户端拿 code 查文案、拿 retryable 决定要不要自动重试。结构上不含 lease、QCA session id、event cursor、operation key、provider request id 与 error digest（附录 A §6.4）。",
+        "operationId": "getTask",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "$ref": "#/components/schemas/IfNoneMatch"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "任务表示。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "ETag 命中，内容未变。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "读取任务表示。",
+        "tags": [
+          "tasks"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND"
+        ]
+      }
+    },
+    "/tasks/{id}/events": {
+      "get": {
+        "description": "wire format 固定为 `id:<sequence>` / `event:<lowercase-name>` / `data:<TaskEvent JSON>`（§5.5）。带 `Last-Event-ID` 重连时先补发 sequence 更大的事件，再进入实时推送；B/C 类任务 20 秒主动结束流，由客户端重连。响应 schema 描述的是**每个 `data:` 载荷**，不是整个响应体 —— `text/event-stream` 的整体形状是 SSE 协议，不是 JSON。",
+        "operationId": "streamTaskEvents",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "schema": {
+              "$ref": "#/components/schemas/TaskEventId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskEvent"
+                }
+              }
+            },
+            "description": "SSE 事件流。schema 描述每个 data: 载荷。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "SSE 订阅任务事件流。",
+        "tags": [
+          "tasks"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND"
+        ]
+      }
+    },
+    "/tasks/{id}:cancel": {
+      "post": {
+        "description": "条件写：`If-Match` 必填，不匹配映射 `REVISION_CONFLICT`。返回**完整的 Task**（不是 taskId），因为取消是一次状态机迁移，客户端需要立刻看到新的 state / stage 与 revision 才能刷新 UI；只有 `QUEUED` / `RUNNING` / `CANCELLING` 可取消，其余映射 `TASK_NOT_CANCELLABLE`。",
+        "operationId": "cancelTask",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "description": "强校验 ETag，形如 \"rev-3\"。不匹配映射 REVISION_CONFLICT。",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IfMatch"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "取消已受理。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：TASK_NOT_CANCELLABLE。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "请求取消任务。",
+        "tags": [
+          "tasks"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND",
+          "TASK_NOT_CANCELLABLE"
+        ]
+      }
+    },
+    "/tasks/{id}:retry": {
+      "post": {
+        "description": "重试是**同一个 task 的新 attempt**，不是新建 task，因此没有 Location。只有 `FAILED` / `TIMED_OUT` 可重试；`retryable` 不得由异常继承推导，只能查固定的 `(stage, code)` 表（附录 A §6.6）。`reason` 是操作说明，不是重试**策略**：请求体全部字段 optional，所以 `requestBody.required` 显式为 false。",
+        "operationId": "retryTask",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "description": "强校验 ETag，形如 \"rev-3\"。不匹配映射 REVISION_CONFLICT。",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IfMatch"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryTaskRequest"
+              }
+            }
+          },
+          "description": "可选的操作说明。",
+          "required": false
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRetryAccepted"
+                }
+              }
+            },
+            "description": "重试已受理。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：ACTIVE_WRITE_TASK_EXISTS, TASK_NOT_RETRYABLE。"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：USAGE_LIMIT_EXCEEDED。",
+            "headers": {
+              "Retry-After": {
+                "description": "delta-seconds。429（RATE_LIMITED 与各类额度耗尽）必须携带。",
+                "required": true,
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "重试同一个任务（新 attempt）。",
+        "tags": [
+          "tasks"
+        ],
+        "x-littleq-error-codes": [
+          "ACTIVE_WRITE_TASK_EXISTS",
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND",
+          "TASK_NOT_RETRYABLE",
+          "USAGE_LIMIT_EXCEEDED"
+        ]
+      }
+    },
+    "/usage/ledger": {
+      "get": {
+        "description": "同一条 operation 有两个 200 media type，由 `format` 选择（缺省 json）。CSV 与 JSON 是**同一 allowlist 字段**，列名由 `LEDGER_CSV_COLUMNS` 从账本行 schema 派生，所以加字段时两侧自动同步。分页区间与普通列表不同：1..500 默认 100（§5.5）。账本追加写、不可变，因此没有 ETag，也没有条件读取。",
+        "operationId": "getUsageLedger",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "subjectUserId",
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "in": "query",
+            "name": "capability",
+            "schema": {
+              "$ref": "#/components/schemas/Capability"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "$ref": "#/components/schemas/Timestamp"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "$ref": "#/components/schemas/Timestamp"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "$ref": "#/components/schemas/Cursor"
+            }
+          },
+          {
+            "description": "1..500，默认 100。",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "$ref": "#/components/schemas/LedgerLimit"
+            }
+          },
+          {
+            "description": "导出格式，缺省 json。csv 分支与 json 是同一 allowlist 字段，并额外带 Content-Disposition。",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "$ref": "#/components/schemas/LedgerExportFormat"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageLedgerPage"
+                }
+              },
+              "text/csv; charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerCsv"
+                }
+              }
+            },
+            "description": "账本分页（JSON）。 导出为 CSV（`format=csv`）：同一 allowlist 字段，响应体是一个 CSV 文本串。",
+            "headers": {
+              "Content-Disposition": {
+                "description": "CSV 导出的附件文件名。**仅 `text/csv` 分支必带**，JSON 分支不返回。",
+                "required": false,
+                "schema": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：FORBIDDEN_CAPABILITY。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "分页导出用量账本（JSON 或 CSV）。",
+        "tags": [
+          "usage"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID"
+        ]
+      }
+    },
+    "/usage/limits": {
+      "get": {
+        "description": "Owner 视角；`subjectUserId` 缺省时由服务端按角色固定 scope。`limitUnits = 0` 是合法值：额度为零只阻断新的 AI task，编辑、预览、发布已有版本、批改与浏览都不受影响（附录 A §6.6）。",
+        "operationId": "getUsageLimits",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "subjectUserId",
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "in": "query",
+            "name": "capability",
+            "schema": {
+              "$ref": "#/components/schemas/Capability"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "$ref": "#/components/schemas/Cursor"
+            }
+          },
+          {
+            "description": "1..100，默认 20。",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "$ref": "#/components/schemas/ListLimit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageLimitPage"
+                }
+              }
+            },
+            "description": "额度分页。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：FORBIDDEN_CAPABILITY。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "分页列出用量额度。",
+        "tags": [
+          "usage"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID"
+        ]
+      },
+      "put": {
+        "description": "整条设置的完整替换（所以是 PUT 不是 PATCH）：所有字段必填。「仅当不存在时创建」由 `If-None-Match: *` 表达，不在 body 里加开关。路径没有 `{id}`，因此不推导 `RESOURCE_NOT_FOUND`；并发冲突走 `REVISION_CONFLICT`。",
+        "operationId": "putUsageLimit",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "$ref": "#/components/schemas/IfMatch"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "$ref": "#/components/schemas/IfNoneMatch"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutUsageLimitRequest"
+              }
+            }
+          },
+          "description": "额度设置。`timezone` 决定「每日」的边界。",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageLimit"
+                }
+              }
+            },
+            "description": "写入后的额度。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED, FORBIDDEN_CAPABILITY。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REVISION_CONFLICT。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "设置某个能力在某个周期的用量额度。",
+        "tags": [
+          "usage"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID",
+          "REVISION_CONFLICT"
+        ]
+      }
+    },
+    "/works/{id}": {
+      "get": {
+        "description": "与 `getPublicWork` 的区别是视角：这条接口面向作者本人，返回的 `Work` 带 `status`；公开面返回的 `PublicWork` 不带 `status`，因为把 `REVOKED` 暴露给匿名访问者本身就是信息泄漏。",
+        "operationId": "getWork",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "$ref": "#/components/schemas/IfNoneMatch"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Work"
+                }
+              }
+            },
+            "description": "作品读模型。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "ETag 命中，内容未变。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "summary": "读取作品（作者视角）。",
+        "tags": [
+          "works"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND"
+        ]
+      },
+      "patch": {
+        "description": "请求体**至少一项**且**禁止额外字段**（`.strict()` ⇒ `additionalProperties: false`）。可见性与删除状态是分离的（附录 A §6.2）：改可见性不会复活已删除的作品。",
+        "operationId": "updateWork",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "description": "强校验 ETag，形如 \"rev-3\"。不匹配映射 REVISION_CONFLICT。",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IfMatch"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkRequest"
+              }
+            }
+          },
+          "description": "visibility 与 commentsEnabled 至少一项。",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Work"
+                }
+              }
+            },
+            "description": "修改后的作品与新的 ETag。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED, FORBIDDEN_CAPABILITY。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REVISION_CONFLICT。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "修改作品的可见性或评论开关。",
+        "tags": [
+          "works"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND",
+          "REVISION_CONFLICT"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "tags": [
+    {
+      "description": "会话登录与登出。",
+      "name": "auth"
+    },
+    {
+      "description": "小组与学生账号。",
+      "name": "groups"
+    },
+    {
+      "description": "项目、版本与生成回合。",
+      "name": "projects"
+    },
+    {
+      "description": "异步任务的读取、取消、重试与事件流。",
+      "name": "tasks"
+    },
+    {
+      "description": "作品与可见性设置。",
+      "name": "works"
+    },
+    {
+      "description": "匿名可访问的公开面。",
+      "name": "public"
+    },
+    {
+      "description": "平台设置：AI 凭证的秘密元数据。",
+      "name": "settings"
+    },
+    {
+      "description": "用量额度与账本。",
+      "name": "usage"
+    },
+    {
+      "description": "license 与健康检查。",
+      "name": "platform"
+    }
+  ]
+}

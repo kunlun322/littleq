@@ -18,7 +18,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "dep-graph": "node tools/check-dependency-graph.mjs",
-    "dep-graph:control": "node tools/check-dependency-graph.mjs --root tools/__fixtures__/dep-graph-violation --expect-failures 7",
+    "dep-graph:control": "node tools/check-dependency-graph.mjs --root tools/__fixtures__/dep-graph-violation --expect-failures 8",
     "license:scan": "node tools/license/scan.mjs",
     "license:scan:strict": "node tools/license/scan.mjs --strict",
     "license:registry-facts": "node tools/license/registry-facts.mjs",
@@ -27,12 +27,16 @@
     "license:third-party:check": "node tools/license/third-party.mjs --check",
     "license:image": "node tools/license/image-scan.mjs",
     "license:control": "node tools/license/control.mjs",
+    "contract:generate": "node tools/contracts/generate.mjs",
+    "contract:check": "node tools/contracts/check.mjs",
+    "contract:compat": "node tools/contracts/compatibility.mjs",
+    "contract:control": "node tools/contracts/control.mjs",
     "bundles": "node tools/build-bundles.mjs",
     "sbom:generate": "node tools/license/sbom.mjs",
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:e2e:smoke": "playwright test",
-    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm dep-graph && pnpm dep-graph:control && pnpm build && pnpm license:scan && pnpm bundles && pnpm license:bundle && pnpm license:third-party:check && pnpm sbom:generate && pnpm license:image && pnpm license:control && pnpm test"
+    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm dep-graph && pnpm dep-graph:control && pnpm build && pnpm contract:check && pnpm contract:compat && pnpm contract:control && pnpm license:scan && pnpm bundles && pnpm license:bundle && pnpm license:third-party:check && pnpm sbom:generate && pnpm license:image && pnpm license:control && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",

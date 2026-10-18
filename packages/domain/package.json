@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
-  "description": "LittleQ 领域层骨架（ZLQ-153 §1.3）：业务规则与领域模型的唯一归属，不依赖任何平台 SDK。",
+  "description": "LittleQ 领域层（ZLQ-153 §1.3）：实体、值对象、状态机、错误码目录与并发/用量策略的唯一归属；零运行时依赖，不引入任何平台 SDK。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

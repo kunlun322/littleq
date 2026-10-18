@@ -13,6 +13,13 @@ THIRD_PARTY_LICENSES
 # 就会带出一份纯排版的 diff，把真正的事实变化埋在里面。与 THIRD_PARTY_LICENSES 同处理。
 config/license-registry-facts.json
 
+# 契约快照由 `pnpm contract:generate` 从已构建的 @littleq/api-contract 生成并提交进仓库
+# （附录 A §4.1：committed snapshot 才是事实源，CI artifact 只作诊断补充）。排除它的理由与
+# 上面那份许可事实快照**完全相同**：格式化后生成器的输出与仓库里的字节不再一致——下次重新
+# 生成就会带出一份纯排版的 diff，把真正的契约变化埋在里面。而 contract:check 是**逐字节**
+# 比较的，一次 prettier 重排就足以让门禁报 CONTRACT_SNAPSHOT_DRIFT，且报出来的差异全是排版。
+contracts/
+
 # 治理文件：内容由 ZLQ-154 交付（CONTRIBUTING.md 的许可证与工具链章节在 ZLQ-162 按裁定改写），
 # 排版是写作决定，不交给 format 脚本。排除它们的实际效果分两种：LICENSE / NOTICE 根本没有
 # 可用解析器，prettier --check 会直接报错而不是「通过」；两份 Markdown 唯一的差异是表格列宽

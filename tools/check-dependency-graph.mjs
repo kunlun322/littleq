@@ -8,6 +8,12 @@
 //   manifest —— package.json 的 dependencies/devDependencies/peerDependencies/optionalDependencies
 //   source   —— 单元目录内所有源码的 import / export-from / import() / require() 说明符
 //
+// 两条**方向**：
+//   deny    —— 出向禁止：某个单元不许碰哪些包/单元/路径（`rule.deny`）。
+//   inbound —— 入向白名单：谁**可以**依赖某个单元（`rule.inbound`，`default: "deny"`）。
+//              被拒绝方不写死成枚举，而是对文件系统动态发现的全部单元生效 —— 新建一个
+//              app 就自动被约束，不需要任何人记得回来补规则。
+//
 // 说明符解析用正则而非 TS AST：TypeScript 7（原生 Go 版）不提供 JS 编译器 API，
 // 而为一个边界扫描额外拉起 TS 6 不划算。AST 级精度由 ESLint 侧的同源规则兜住，
 // 本扫描器额外覆盖 ESLint 管不到的 manifest 与路径通配（**/drivers/**）。
@@ -190,6 +196,94 @@ function matchesDenyPath(deny, normalizedPath) {
   return matcher ? `sourcePathGlobs 匹配 ${matcher} -> ${normalizedPath}` : null;
 }
 
+// 遍历一个单元的所有源码说明符。出向禁止与入向白名单共用这一份遍历，
+// 两侧因此不可能因为「扫描方式不同」而一个抓得到、一个抓不到。
+function scanUnitSource({ unit, unitId, root, units, names, extensions, onSpecifier }) {
+  if (!isDirectory(unit.dir)) return;
+  for (const file of walkSourceFiles(unit.dir, extensions)) {
+    const source = readFileSync(file, 'utf8');
+    for (const pattern of SPECIFIER_PATTERNS) {
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(source)) !== null) {
+        onSpecifier({
+          specifier: match[1],
+          classified: classifySpecifier(match[1], file, unitId, root, units, names),
+          file: toPosix(relative(root, file)),
+          line: lineOf(source, match.index),
+        });
+      }
+    }
+  }
+}
+
+// 入向约束（`inbound.default = "deny"`）：谁**可以**依赖某个单元。
+//
+// 它必须是入向而不是把禁止方逐个写进出向规则：出向规则 enumerates「A 不许碰 B」，
+// 每多一个单元就要多改一处策略，而漏改是静默的。入向规则反过来 —— 白名单只有
+// `allowFrom` 里那几个名字，其余**由文件系统动态发现的全部单元**一律默认拒绝，
+// 新建一个 app 就自动被约束，不需要任何人记得去补规则。
+//
+// 目标单元自身与 `allowFrom` 里的单元跳过；`default` 不是 `deny` 时整条入向不生效
+// （显式声明语义，而不是把「没写 default」当成放行）。
+function checkInbound({ rule, units, names, root, extensions, manifestFields, appliesTo }) {
+  const inbound = rule.inbound;
+  if (!inbound || inbound.default !== 'deny') return [];
+  const target = inbound.targetUnit;
+  if (!units.has(target)) return []; // 目标单元尚未落地，入向约束无从触发
+  const targetName = units.get(target).name;
+  const allowed = new Set(inbound.allowFrom ?? []);
+  const found = [];
+
+  for (const [unitId, unit] of units) {
+    if (unitId === target || allowed.has(unitId)) continue;
+    const reason = `inbound.default=deny，${unitId} 不在 allowFrom（${[...allowed].sort().join(', ')}）里 -> ${target}`;
+
+    if (appliesTo.has('manifest') && unit.manifest && targetName) {
+      for (const field of manifestFields) {
+        for (const dependency of Object.keys(unit.manifest[field] ?? {})) {
+          if (packageNameOf(dependency) !== targetName) continue;
+          found.push({
+            rule: rule.id,
+            spec: rule.spec,
+            surface: 'manifest',
+            unit: unitId,
+            file: toPosix(join(unitId, 'package.json')),
+            line: null,
+            specifier: dependency,
+            field,
+            reason,
+          });
+        }
+      }
+    }
+
+    if (!appliesTo.has('source')) continue;
+    scanUnitSource({
+      unit,
+      unitId,
+      root,
+      units,
+      names,
+      extensions,
+      onSpecifier: ({ specifier, classified, file, line }) => {
+        if (classified.unit !== target) return;
+        found.push({
+          rule: rule.id,
+          spec: rule.spec,
+          surface: 'source',
+          unit: unitId,
+          file,
+          line,
+          specifier,
+          reason,
+        });
+      },
+    });
+  }
+  return found;
+}
+
 export function checkDependencyGraph({ root, policyFile }) {
   const policy = JSON.parse(readFileSync(policyFile, 'utf8'));
   const extensions = policy.sourceExtensions ?? ['.ts', '.tsx', '.mjs', '.js'];
@@ -239,47 +333,50 @@ export function checkDependencyGraph({ root, policyFile }) {
         }
       }
 
-      if (!appliesTo.has('source') || !isDirectory(unit.dir)) continue;
-      for (const file of walkSourceFiles(unit.dir, extensions)) {
-        const source = readFileSync(file, 'utf8');
-        for (const pattern of SPECIFIER_PATTERNS) {
-          pattern.lastIndex = 0;
-          let match;
-          while ((match = pattern.exec(source)) !== null) {
-            const specifier = match[1];
-            const classified = classifySpecifier(specifier, file, unitId, root, units, names);
-            const hits = [];
+      if (!appliesTo.has('source')) continue;
+      scanUnitSource({
+        unit,
+        unitId,
+        root,
+        units,
+        names,
+        extensions,
+        onSpecifier: ({ specifier, classified, file, line }) => {
+          const hits = [];
 
-            if (classified.kind === 'package' || classified.kind === 'workspace') {
-              const packageName = classified.packageName ?? packageNameOf(specifier);
-              const packageReason = matchesDenyPackage(deny, packageName);
-              if (packageReason) hits.push(packageReason);
-            }
-            if (classified.kind === 'relative') {
-              const pathReason = matchesDenyPath(deny, classified.path);
-              if (pathReason) hits.push(pathReason);
-            }
-            if (classified.unit) {
-              const unitReason = matchesDenyUnit(deny, classified.unit);
-              if (unitReason) hits.push(unitReason);
-            }
-
-            for (const reason of new Set(hits)) {
-              violations.push({
-                rule: rule.id,
-                spec: rule.spec,
-                surface: 'source',
-                unit: unitId,
-                file: toPosix(relative(root, file)),
-                line: lineOf(source, match.index),
-                specifier,
-                reason,
-              });
-            }
+          if (classified.kind === 'package' || classified.kind === 'workspace') {
+            const packageName = classified.packageName ?? packageNameOf(specifier);
+            const packageReason = matchesDenyPackage(deny, packageName);
+            if (packageReason) hits.push(packageReason);
           }
-        }
-      }
+          if (classified.kind === 'relative') {
+            const pathReason = matchesDenyPath(deny, classified.path);
+            if (pathReason) hits.push(pathReason);
+          }
+          if (classified.unit) {
+            const unitReason = matchesDenyUnit(deny, classified.unit);
+            if (unitReason) hits.push(unitReason);
+          }
+
+          for (const reason of new Set(hits)) {
+            violations.push({
+              rule: rule.id,
+              spec: rule.spec,
+              surface: 'source',
+              unit: unitId,
+              file,
+              line,
+              specifier,
+              reason,
+            });
+          }
+        },
+      });
     }
+
+    violations.push(
+      ...checkInbound({ rule, units, names, root, extensions, manifestFields, appliesTo }),
+    );
   }
 
   return {

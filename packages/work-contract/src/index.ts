@@ -1,8 +1,9 @@
 /**
  * `@littleq/work-contract` — 作品契约层骨架。
  *
- * 本文件由 ZLQ-159（仓库与质量基座）落地，**只含骨架，不含任何业务逻辑**：
- * `work.json` 的真实字段、资源清单、素材许可记录与校验规则由 ZLQ-160 在此实现。
+ * 本包目前**只含骨架，不含任何业务逻辑**：真实 `work.json` 字段、资源清单、素材许可
+ * 记录与校验规则由作品契约与扫描器核心阶段实现，届时 `unitManifest.skeletonOnly`
+ * 与它的测试在同一次提交里翻为 `false`。
  *
  * 边界（ZLQ-153 §1.3）——由 `config/dependency-graph.json` 强制：
  *

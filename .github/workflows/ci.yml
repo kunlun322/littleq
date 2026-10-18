@@ -31,6 +31,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      # 手动触发时没有事件负载可以推导 base，所以基线必须由触发者显式给出。
+      # `required: true` 是刻意的：留空会让下面的解析步骤拿不到 SHA，而"拿不到 base"
+      # 必须以 exit 2 / CONTRACT_BASE_UNAVAILABLE 失败，绝不能退化成 head 跟自己比。
+      contract_base_sha:
+        description: '契约兼容性比较的 base commit SHA（40 位，非全零，不同于 head）'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -74,7 +82,7 @@ jobs:
       - name: 依赖图门禁
         run: pnpm dep-graph
 
-      - name: 依赖图门禁对照用例（故意植入的 7 处违规必须全部命中）
+      - name: 依赖图门禁对照用例（故意植入的 8 处违规必须全部命中）
         run: pnpm dep-graph:control
 
       # typecheck 已经跑过 `tsc -b`，这一步是增量空操作。保留它有两个理由：产物要落在
@@ -82,6 +90,74 @@ jobs:
       # 从 CI 里删掉它等于让「构建能过」这件事不再被强制。
       - name: 构建
         run: pnpm build
+
+      # 契约快照一致性：从**已构建**的 @littleq/api-contract 重新生成，与仓库里提交的
+      # 快照逐字节比较（附录 A §4.2 A）。放在 build 之后是硬性顺序——生成入口读的是
+      # dist，不是 src。这一步只读，绝不回写快照。
+      - name: 契约快照一致性（生成结果与已提交快照逐字节相同）
+        run: pnpm contract:check
+
+      # 基线解析（附录 B G1）：不改 checkout 的 depth=1、不全量拉历史、不走 REST API，
+      # 也绝不因 push event 跳过比较。三种事件各有一个**事件定义的前态**：
+      #   push              → github.event.before
+      #   pull_request      → github.event.pull_request.base.sha
+      #   workflow_dispatch → 必填的 contract_base_sha 输入
+      # 事件负载一律通过 step 级 env 传入，不在 run 块里插值（仓库既有约束：任何 run 块
+      # 内插 github.event 都等于把不可信文本拼进 shell）。
+      - name: 解析契约比较基线 CONTRACT_BASE_SHA
+        id: contract_base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DISPATCH_BASE_SHA: ${{ github.event.inputs.contract_base_sha }}
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::CONTRACT_BASE_UNAVAILABLE — $1"
+            exit 2
+          }
+
+          case "$EVENT_NAME" in
+            push) sha="$PUSH_BEFORE" ;;
+            pull_request) sha="$PR_BASE_SHA" ;;
+            workflow_dispatch) sha="$DISPATCH_BASE_SHA" ;;
+            *) fail "未建模的触发事件 '$EVENT_NAME'，无法确定契约比较基线" ;;
+          esac
+
+          # 40 位十六进制、非全零、不同于 head。全零是 GitHub 对「新建分支/新建仓库」
+          # 的占位值，不是一个 commit；回退到 HEAD^ 或工作树都在附录 B 明令禁止之列。
+          zero_sha='0000000000000000000000000000000000000000'
+          printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$' \
+            || fail "基线 SHA '$sha' 不是 40 位十六进制 commit SHA"
+          [ "$sha" != "$zero_sha" ] \
+            || fail '基线 SHA 全零：本次事件没有可用的前态'
+          head_sha="$(git rev-parse HEAD)"
+          [ "$sha" != "$head_sha" ] \
+            || fail "基线 SHA 与 head ($head_sha) 相同，比较会退化成自身对拍"
+
+          # 浅克隆里这个 commit 默认不存在。只补这一个 commit（depth=1），不拉全量历史。
+          git fetch --no-tags --depth=1 origin "$sha" \
+            || fail "无法从 origin 取到基线 commit $sha"
+          [ "$(git rev-parse FETCH_HEAD)" = "$sha" ] \
+            || fail "FETCH_HEAD 与请求的基线 SHA 不一致"
+          git cat-file -e "$sha^{commit}" \
+            || fail "基线 commit $sha 在本地不可读"
+
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # 兼容性：比较事件定义的前态与本次 head 的聚合变化，不要求本地存在 merge-base。
+      # 基线不可得时比较器自己以 exit 2 / CONTRACT_BASE_UNAVAILABLE 失败，不退化。
+      - name: 契约兼容性（相对 base 无破坏性变更；base 不可得即 exit 2）
+        env:
+          CONTRACT_BASE_SHA: ${{ steps.contract_base.outputs.sha }}
+        run: pnpm contract:compat
+
+      # 对照用例：证明上面两道门禁真的会红。全部 fixture 提交在仓库里，不读 host git /
+      # host node_modules / 平台状态，所以它在任何 runner 上跑的是同一组断言。
+      - name: 契约门禁对照用例（破坏性变更必须被抓到、非破坏性必须放行）
+        run: pnpm contract:control
 
       # 产物落在 artifacts/（已 gitignore）。这里生成它是为了把 web.js 交给
       # 下面的 e2e-smoke 作业复用同一份构建配置；单元/工具测试自己会按需重建，

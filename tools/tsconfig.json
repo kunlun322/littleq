@@ -7,7 +7,9 @@
   // import 路径写错都会被抓到），行为正确性交给控制用例证明：
   //   tools/license/control.mjs        131 条断言，四份夹具覆盖 0 / 1 / 2 三档退出码
   //                                    （含派生策略对照：批准前提失效、pending、rejected）
-  //   tools/check-dependency-graph.mjs --expect-failures 7   故意植入的 7 处违规必须全部命中
+  //   tools/check-dependency-graph.mjs --expect-failures 8   故意植入的 8 处违规必须全部命中
+  //   tools/contracts/control.mjs      契约门禁对照：每条方差规则一对红/绿 fixture，
+  //                                    基线不可得与 bootstrap 只允许一次也各有专例
   // 产品代码（apps/* packages/* 的 .ts）与 *.config.ts 仍然是全严格类型检查。
   "extends": "../tsconfig.base.json",
   "compilerOptions": {

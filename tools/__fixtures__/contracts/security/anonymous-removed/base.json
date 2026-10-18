@@ -1,0 +1,46 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LittleQ API 契约门禁 fixture",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "paths": {
+    "/probe": {
+      "post": {
+        "operationId": "probeWrite",
+        "summary": "对照用例专用写端点",
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "204": {
+            "description": "无内容"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "CookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "littleq_session"
+      },
+      "CsrfHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token"
+      }
+    }
+  }
+}
