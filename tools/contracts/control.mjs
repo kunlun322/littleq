@@ -1388,16 +1388,37 @@ export function runControl(options = {}) {
     if (options.keepTemp !== true) rmSync(workRoot, { recursive: true, force: true });
   }
 
+  const groups = Object.fromEntries(
+    Object.keys(GROUPS)
+      .sort()
+      .map((key) => [key, results.filter((item) => item.group === key).length]),
+  );
+
+  // 全量分支的零用例守卫：`passed/total` 是同源比值，删掉一整组用例后分子分母一起缩，
+  // 「全部符合」在缩量后依然为真，那一组守的破坏性变更类型就静默失去对照覆盖。
+  //
+  // 下限刻意写成「GROUPS 每组 ≥1 条已执行」而不是用例总数常量：总数是中间观测量，钉住它
+  // 会随分组增删过期，且恰好放行「整组消失但总数仍达标」——那正是本守卫要防的失效模式。
+  // `--only` 分支不适用：它本来就只跑一个前缀，其余组为 0 是调用方的意图，那里由上面的
+  // 「没有匹配到任何用例」守卫兜住。
+  if (only === null) {
+    const emptyGroups = Object.keys(groups).filter((key) => groups[key] === 0);
+    if (emptyGroups.length > 0) {
+      throw new ContractControlError(
+        CONTROL_DIAGNOSIS.expectation,
+        `${emptyGroups.length} 个用例组一条都没执行：${emptyGroups.join(', ')}（GROUPS 共 ` +
+          `${Object.keys(GROUPS).length} 组，本次执行 ${results.length} 条）。` +
+          '每组至少 1 条对照是这道门禁的覆盖下限，缩量后 passed/total 仍会全绿，故 fail-closed。',
+      );
+    }
+  }
+
   return {
     ok: results.every((item) => item.ok),
     total: results.length,
     passed: results.filter((item) => item.ok).length,
     failed: results.filter((item) => !item.ok).map((item) => item.id),
-    groups: Object.fromEntries(
-      Object.keys(GROUPS)
-        .sort()
-        .map((key) => [key, results.filter((item) => item.group === key).length]),
-    ),
+    groups,
     results,
     workRoot: options.keepTemp === true ? workRoot : null,
   };
