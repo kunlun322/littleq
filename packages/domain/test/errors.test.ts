@@ -93,7 +93,7 @@ const FROZEN_CATALOG: readonly (readonly [
 
 const ALL_CODES: readonly string[] = FROZEN_CATALOG.map(([code]) => code);
 
-describe('错误码目录：逐行冻结', () => {
+describe('error-catalog-frozen：错误码目录逐行冻结', () => {
   it('目录与 §5.2 的冻结表逐行逐字段一致（含顺序）', () => {
     expect(
       DOMAIN_ERROR_CATALOG.map((entry) => [

@@ -1012,6 +1012,28 @@
         "pattern": "^(?:0|[1-9][0-9]*)$",
         "type": "string"
       },
+      "RevokeSecretRequest": {
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/OperatorNote"
+          }
+        },
+        "type": "object"
+      },
+      "RotateSecretRequest": {
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/OperatorNote"
+          },
+          "value": {
+            "$ref": "#/components/schemas/SecretValue"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
       "SafeScanSummary": {
         "additionalProperties": false,
         "properties": {
@@ -1397,6 +1419,36 @@
           "RESCAN"
         ],
         "type": "string"
+      },
+      "TaskPumpOutcome": {
+        "enum": [
+          "ADVANCED",
+          "COALESCED_IN_FLIGHT",
+          "NO_OP_WAITING",
+          "NO_OP_CANCELLING",
+          "NO_OP_TERMINAL"
+        ],
+        "type": "string"
+      },
+      "TaskPumpResult": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/TaskPumpOutcome"
+          },
+          "task": {
+            "$ref": "#/components/schemas/Task"
+          },
+          "taskId": {
+            "$ref": "#/components/schemas/UuidV7"
+          }
+        },
+        "required": [
+          "outcome",
+          "task",
+          "taskId"
+        ],
+        "type": "object"
       },
       "TaskRetryAccepted": {
         "additionalProperties": false,
@@ -3382,7 +3434,7 @@
         ]
       },
       "put": {
-        "description": "成功返回 **204 无 body**：不回显、不返回 hash。这是「秘密值只有入向、没有出向」的结构性保证 —— 服务端没有第二条把明文送出去的路径。v1 不提供删除能力，因此不可变的部署型凭证需要重新部署，映射 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`。",
+        "description": "成功返回 **204 无 body**：不回显、不返回 hash。这是「秘密值只有入向、没有出向」的结构性保证 —— 服务端没有第二条把明文送出去的路径（`:rotate` 与 `:revoke` 同样返回 204，整个 `/settings/secrets/*` 资源因此没有任何出向 body）。PUT 是**幂等**的写入：首次配置与覆盖同一个值都走它，因此它不要求凭证已被配置过 —— 那是 `:rotate` 的前提条件。部署注入的凭证（平台级，不是用户 BYO）在本接口映射 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`：它的值由部署环境变量提供，改它只能重新部署。",
         "operationId": "putSecret",
         "parameters": [
           {
@@ -3456,7 +3508,187 @@
             "CsrfHeader": []
           }
         ],
-        "summary": "写入（轮换）某个 AI 凭证。",
+        "summary": "写入（配置或覆盖）某个 AI 凭证。",
+        "tags": [
+          "settings"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID",
+          "SECRET_IMMUTABLE_REDEPLOY_REQUIRED",
+          "SECRET_KIND_UNSUPPORTED"
+        ]
+      }
+    },
+    "/settings/secrets/{kind}:revoke": {
+      "post": {
+        "description": "把 `configured` 置为 false 并丢弃当前值，凭证从此不可用。这是 §7 选项 B（用户自带凭证）必需的出口：没有它，一个填错的 PAT 只能被另一个值覆盖，用户无法**停用**它。撤销是**幂等**的 —— 对已经未配置的种类再撤销一次同样返回 204，因为期望的效果已经成立，把它报成错误会逼客户端先 GET 一次才能安全地撤销。`lastRotatedAt` 与内部代数**保留**：\"这个凭证上次被换掉是什么时候\"在撤销之后仍然是一条为真的审计事实。请求体只有一个可选注记，因此 `requestBody.required` 显式为 false。部署注入的凭证映射 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`。",
+        "operationId": "revokeSecret",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SecretKind"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSecretRequest"
+              }
+            }
+          },
+          "description": "可选的操作注记。",
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "已撤销，不回显。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID, SECRET_KIND_UNSUPPORTED。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED, FORBIDDEN_CAPABILITY。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：SECRET_IMMUTABLE_REDEPLOY_REQUIRED。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "撤销某个 AI 凭证（停止使用，不删除历史）。",
+        "tags": [
+          "settings"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "FORBIDDEN_CAPABILITY",
+          "REQUEST_INVALID",
+          "SECRET_IMMUTABLE_REDEPLOY_REQUIRED",
+          "SECRET_KIND_UNSUPPORTED"
+        ]
+      }
+    },
+    "/settings/secrets/{kind}:rotate": {
+      "post": {
+        "description": "与 PUT 的差别是**前提与语义**，不是载荷：`:rotate` 要求凭证已经配置过，它表达的是一次显式的轮换动作 ——「让当前值失效并换上一个新的」。分开建模是为了让 `audit_logs` 能区分一次首配与一次因为怀疑泄漏而做的轮换（domain 侧是 `SECRET_PUT` 与 `SECRET_ROTATE` 两个动作）。对未配置的种类调用映射 `REQUEST_INVALID`：那不是\"轮换\"，客户端应当改调 PUT。轮换后 `SecretMetadata.lastRotatedAt` 前进、`configured` 仍为 true，**永不返回新旧任何一个值**。部署注入的凭证同样映射 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`。",
+        "operationId": "rotateSecret",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SecretKind"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateSecretRequest"
+              }
+            }
+          },
+          "description": "新的秘密明文，可选的操作注记。",
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "已轮换，不回显。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID, SECRET_KIND_UNSUPPORTED。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED, FORBIDDEN_CAPABILITY。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：SECRET_IMMUTABLE_REDEPLOY_REQUIRED。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "轮换某个 AI 凭证（旧值立即失效）。",
         "tags": [
           "settings"
         ],
@@ -3765,6 +3997,121 @@
           "REQUEST_INVALID",
           "RESOURCE_NOT_FOUND",
           "TASK_NOT_CANCELLABLE"
+        ]
+      }
+    },
+    "/tasks/{id}:pump": {
+      "post": {
+        "description": "把任务向前推进**一个有界切片**，不是一整个回合：§12.2 要求完整回合可以由多次 pump 拼成，且不存在任何一个等待完整 QCA 回合的 HTTP 请求。返回 **200**（不是 202）——pump 在请求内同步做完它这一片，响应里的 `outcome` 与 `task` 就是当下的事实，没有\"稍后再告诉你\"的悬空承诺。`outcome` 把\"什么都没做\"分成三种互不相同的原因（`NO_OP_WAITING` 在等退避 / `NO_OP_CANCELLING` 正在被取消 / `NO_OP_TERMINAL` 已到终态），三者都是 200 而**不是** 409：终态任务再 pump 一次不是冲突，把它报成冲突会让客户端按\"重新 GET 再试\"的语义无限循环。单飞由 `If-Match` 的 revision CAS 与租约共同保证，**不是**服务端进程内的 in-flight 集合（附录 A §6.5 规则 5：进程内 semaphore 或 Map 不是事实源）—— 输家在赢家仍在推进时拿到 200 `COALESCED_IN_FLIGHT`，在赢家已提交后拿到 409 `REVISION_CONFLICT`。切片内部发生的 provider 失败**不**从本接口同步返回：它按 §5.5 记在任务上，经 `GET /tasks/{id}` 以 HTTP 200 + `task.error` 暴露，否则同一个事实会有两条错误通道。无请求体：pump 是机械推进，不是带理由的操作者动作。",
+        "operationId": "pumpTask",
+        "parameters": [
+          {
+            "description": "小写 UUIDv7。",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UuidV7"
+            }
+          },
+          {
+            "description": "强校验 ETag，形如 \"rev-3\"。不匹配映射 REVISION_CONFLICT。",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IfMatch"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskPumpResult"
+                }
+              }
+            },
+            "description": "本次 pump 的结果与任务当前表示。",
+            "headers": {
+              "ETag": {
+                "description": "强校验值 \"rev-<Revision>\"；变更请求需回填到 If-Match。",
+                "required": true,
+                "schema": {
+                  "pattern": "^\"rev-(?:0|[1-9][0-9]*)\"$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REQUEST_INVALID。"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：AUTHENTICATION_REQUIRED。"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：CSRF_REJECTED。"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：RESOURCE_NOT_FOUND。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "统一错误 envelope。可能的码：REVISION_CONFLICT。"
+          }
+        },
+        "security": [
+          {
+            "CookieAuth": [],
+            "CsrfHeader": []
+          }
+        ],
+        "summary": "推进一步任务（客户端单飞）。",
+        "tags": [
+          "tasks"
+        ],
+        "x-littleq-error-codes": [
+          "AUTHENTICATION_REQUIRED",
+          "CSRF_REJECTED",
+          "REQUEST_INVALID",
+          "RESOURCE_NOT_FOUND",
+          "REVISION_CONFLICT"
         ]
       }
     },

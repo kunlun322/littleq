@@ -1,5 +1,5 @@
 /**
- * operation registry —— 28 条接口的**唯一事实源**。
+ * operation registry —— 31 条接口的**唯一事实源**。
  *
  * 这是一份数据声明，不含任何生成逻辑：OpenAPI 文档由 `openapi.ts` 从它单向派生，
  * apps/api 之后只能引用派生结果，不得再声明第二套 DTO 校验规则（附录 A §3.5）。
@@ -22,7 +22,7 @@
  *
  * **3. 专属码只写 §5.4 表格右栏。** 共享码（`REQUEST_INVALID` /
  * `AUTHENTICATION_REQUIRED` / `CSRF_REJECTED` / `RESOURCE_NOT_FOUND`）由 `openapi.ts`
- * 从 method、security 与 path 推导，**不在这里重复声明**：抄一遍就有 28 次漂移机会，
+ * 从 method、security 与 path 推导，**不在这里重复声明**：抄一遍就有 31 次漂移机会，
  * 而推导只会跟着 security 与路径自动变化。
  */
 import type { ZodOpenApiSecuritySchemeObject } from 'zod-openapi';
@@ -81,6 +81,7 @@ import {
   streamTaskEventsHeaderSchema,
   taskAcceptedSchema,
   taskEventSchema,
+  taskPumpResultSchema,
   taskRetryAcceptedSchema,
   taskSchema,
 } from './schemas/tasks.js';
@@ -92,6 +93,8 @@ import {
 } from './schemas/works.js';
 import {
   putSecretRequestSchema,
+  revokeSecretRequestSchema,
+  rotateSecretRequestSchema,
   secretKindPathSchema,
   secretMetadataSchema,
 } from './schemas/settings.js';
@@ -165,7 +168,7 @@ function notModified(description: string): SuccessResponse {
   return { status: 304, description, mediaType: null, headers: ['ETag'], schema: null };
 }
 
-/** JSON 成功响应，占了 28 条里的绝大多数，所以单独一个不带 media type 参数的糖。 */
+/** JSON 成功响应，占了 31 条里的绝大多数，所以单独一个不带 media type 参数的糖。 */
 function json(
   status: number,
   description: string,
@@ -191,7 +194,7 @@ function body(schema: WireSchema, description: string, required = true) {
 }
 
 /**
- * 28 条 operation。数组顺序**就是 §5.4 接口表的顺序**。
+ * 31 条 operation。数组顺序**就是 §5.4 接口表的顺序**。
  *
  * 顺序在这里有意义、在快照里没有：生成器把它写进 `paths`，而 `paths` 是对象，
  * 归一化器会按 §4.1 递归排序对象 key，所以快照里是按路径字母序。这不损失什么 ——
@@ -437,6 +440,30 @@ export const operationRegistry: readonly OperationContract[] = [
     success: [json(202, '重试已受理。', taskRetryAcceptedSchema, ['ETag'])],
     exclusiveErrorCodes: ['TASK_NOT_RETRYABLE', 'ACTIVE_WRITE_TASK_EXISTS', 'USAGE_LIMIT_EXCEEDED'],
   },
+  {
+    operationId: 'pumpTask',
+    method: 'post',
+    path: '/tasks/{id}:pump',
+    summary: '推进一步任务（客户端单飞）。',
+    description:
+      '把任务向前推进**一个有界切片**，不是一整个回合：§12.2 要求完整回合可以由多次 pump ' +
+      '拼成，且不存在任何一个等待完整 QCA 回合的 HTTP 请求。返回 **200**（不是 202）——' +
+      'pump 在请求内同步做完它这一片，响应里的 `outcome` 与 `task` 就是当下的事实，' +
+      '没有"稍后再告诉你"的悬空承诺。`outcome` 把"什么都没做"分成三种互不相同的原因' +
+      '（`NO_OP_WAITING` 在等退避 / `NO_OP_CANCELLING` 正在被取消 / `NO_OP_TERMINAL` 已到终态），' +
+      '三者都是 200 而**不是** 409：终态任务再 pump 一次不是冲突，把它报成冲突会让客户端' +
+      '按"重新 GET 再试"的语义无限循环。单飞由 `If-Match` 的 revision CAS 与租约共同保证，' +
+      '**不是**服务端进程内的 in-flight 集合（附录 A §6.5 规则 5：进程内 semaphore 或 Map ' +
+      '不是事实源）—— 输家在赢家仍在推进时拿到 200 `COALESCED_IN_FLIGHT`，在赢家已提交后' +
+      '拿到 409 `REVISION_CONFLICT`。切片内部发生的 provider 失败**不**从本接口同步返回：' +
+      '它按 §5.5 记在任务上，经 `GET /tasks/{id}` 以 HTTP 200 + `task.error` 暴露，' +
+      '否则同一个事实会有两条错误通道。无请求体：pump 是机械推进，不是带理由的操作者动作。',
+    tags: ['tasks'],
+    security: SESSION_WITH_CSRF_SECURITY,
+    request: { path: idPathSchema, header: ifMatchHeaderSchema },
+    success: [json(200, '本次 pump 的结果与任务当前表示。', taskPumpResultSchema, ['ETag'])],
+    exclusiveErrorCodes: ['REVISION_CONFLICT'],
+  },
 
   // ---- versions -----------------------------------------------------------
   {
@@ -600,11 +627,14 @@ export const operationRegistry: readonly OperationContract[] = [
     operationId: 'putSecret',
     method: 'put',
     path: '/settings/secrets/{kind}',
-    summary: '写入（轮换）某个 AI 凭证。',
+    summary: '写入（配置或覆盖）某个 AI 凭证。',
     description:
       '成功返回 **204 无 body**：不回显、不返回 hash。这是「秘密值只有入向、没有出向」的结构性保证 ——' +
-      ' 服务端没有第二条把明文送出去的路径。v1 不提供删除能力，因此不可变的部署型凭证需要重新部署，' +
-      '映射 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`。',
+      ' 服务端没有第二条把明文送出去的路径（`:rotate` 与 `:revoke` 同样返回 204，整个 ' +
+      '`/settings/secrets/*` 资源因此没有任何出向 body）。PUT 是**幂等**的写入：首次配置与' +
+      '覆盖同一个值都走它，因此它不要求凭证已被配置过 —— 那是 `:rotate` 的前提条件。' +
+      '部署注入的凭证（平台级，不是用户 BYO）在本接口映射 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`：' +
+      '它的值由部署环境变量提供，改它只能重新部署。',
     tags: ['settings'],
     security: SESSION_WITH_CSRF_SECURITY,
     request: {
@@ -612,6 +642,57 @@ export const operationRegistry: readonly OperationContract[] = [
       body: body(putSecretRequestSchema, '秘密明文。契约层只约束长度与字符集，不做任何脱敏。'),
     },
     success: [noContent('已写入，不回显。')],
+    exclusiveErrorCodes: [
+      'FORBIDDEN_CAPABILITY',
+      'SECRET_KIND_UNSUPPORTED',
+      'SECRET_IMMUTABLE_REDEPLOY_REQUIRED',
+    ],
+  },
+  {
+    operationId: 'rotateSecret',
+    method: 'post',
+    path: '/settings/secrets/{kind}:rotate',
+    summary: '轮换某个 AI 凭证（旧值立即失效）。',
+    description:
+      '与 PUT 的差别是**前提与语义**，不是载荷：`:rotate` 要求凭证已经配置过，它表达的是一次' +
+      '显式的轮换动作 ——「让当前值失效并换上一个新的」。分开建模是为了让 `audit_logs` 能区分' +
+      '一次首配与一次因为怀疑泄漏而做的轮换（domain 侧是 `SECRET_PUT` 与 `SECRET_ROTATE` 两个动作）。' +
+      '对未配置的种类调用映射 `REQUEST_INVALID`：那不是"轮换"，客户端应当改调 PUT。' +
+      '轮换后 `SecretMetadata.lastRotatedAt` 前进、`configured` 仍为 true，**永不返回新旧任何一个值**。' +
+      '部署注入的凭证同样映射 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`。',
+    tags: ['settings'],
+    security: SESSION_WITH_CSRF_SECURITY,
+    request: {
+      path: secretKindPathSchema,
+      body: body(rotateSecretRequestSchema, '新的秘密明文，可选的操作注记。'),
+    },
+    success: [noContent('已轮换，不回显。')],
+    exclusiveErrorCodes: [
+      'FORBIDDEN_CAPABILITY',
+      'SECRET_KIND_UNSUPPORTED',
+      'SECRET_IMMUTABLE_REDEPLOY_REQUIRED',
+    ],
+  },
+  {
+    operationId: 'revokeSecret',
+    method: 'post',
+    path: '/settings/secrets/{kind}:revoke',
+    summary: '撤销某个 AI 凭证（停止使用，不删除历史）。',
+    description:
+      '把 `configured` 置为 false 并丢弃当前值，凭证从此不可用。这是 §7 选项 B（用户自带凭证）' +
+      '必需的出口：没有它，一个填错的 PAT 只能被另一个值覆盖，用户无法**停用**它。' +
+      '撤销是**幂等**的 —— 对已经未配置的种类再撤销一次同样返回 204，因为期望的效果已经成立，' +
+      '把它报成错误会逼客户端先 GET 一次才能安全地撤销。`lastRotatedAt` 与内部代数**保留**：' +
+      '"这个凭证上次被换掉是什么时候"在撤销之后仍然是一条为真的审计事实。' +
+      '请求体只有一个可选注记，因此 `requestBody.required` 显式为 false。' +
+      '部署注入的凭证映射 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`。',
+    tags: ['settings'],
+    security: SESSION_WITH_CSRF_SECURITY,
+    request: {
+      path: secretKindPathSchema,
+      body: body(revokeSecretRequestSchema, '可选的操作注记。', false),
+    },
+    success: [noContent('已撤销，不回显。')],
     exclusiveErrorCodes: [
       'FORBIDDEN_CAPABILITY',
       'SECRET_KIND_UNSUPPORTED',
@@ -725,7 +806,7 @@ export const operationRegistry: readonly OperationContract[] = [
   },
 ];
 
-/** 便于测试与生成器共用的只读索引。构造一次，避免 28 条记录被反复线性查找。 */
+/** 便于测试与生成器共用的只读索引。构造一次，避免 31 条记录被反复线性查找。 */
 export const operationById: Readonly<Record<string, OperationContract>> = Object.fromEntries(
   operationRegistry.map((entry) => [entry.operationId, entry]),
 );

@@ -35,6 +35,12 @@ function uuidV7Parser<Name extends string>(name: string): UuidV7Parser<Name> {
 export type UserId = Branded<string, 'UserId'>;
 /** 同一身份在「归属者」角色下的名字；不另立品牌，避免无意义的来回转换。 */
 export type OwnerId = UserId;
+/**
+ * 服务端会话的主键。它是 cookie 里那个不透明值的**领域侧名字**：wire 上只以
+ * `Set-Cookie: littleq_session=<opaque>` 的形式存在，从不作为 JSON 字段出现
+ * （`LEAKY_FIELD_NAMES` 禁止任何名为 `sessionId` 的响应字段）。
+ */
+export type AccountSessionId = Branded<string, 'AccountSessionId'>;
 export type GroupId = Branded<string, 'GroupId'>;
 export type ProjectId = Branded<string, 'ProjectId'>;
 export type ProjectVersionId = Branded<string, 'ProjectVersionId'>;
@@ -54,6 +60,7 @@ export type AchievementId = Branded<string, 'AchievementId'>;
 export type TemplateId = Branded<string, 'TemplateId'>;
 
 export const parseUserId = uuidV7Parser<'UserId'>('UserId');
+export const parseAccountSessionId = uuidV7Parser<'AccountSessionId'>('AccountSessionId');
 export const parseGroupId = uuidV7Parser<'GroupId'>('GroupId');
 export const parseProjectId = uuidV7Parser<'ProjectId'>('ProjectId');
 export const parseProjectVersionId = uuidV7Parser<'ProjectVersionId'>('ProjectVersionId');

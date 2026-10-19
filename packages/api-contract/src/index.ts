@@ -12,7 +12,7 @@
  *   `OperationContract` 这类**描述契约本身的类型**。
  * - `schemas/{auth,groups,projects,tasks,works,settings,usage}.ts` —— 按业务面切分的
  *   请求/响应 DTO，一一对应 §5.4 接口表的分组。
- * - `operations.ts` —— 28 条 operation 的注册表，顺序即 §5.4 表格顺序。
+ * - `operations.ts` —— 31 条 operation 的注册表，顺序即 §5.4 表格顺序。
  * - `openapi.ts` —— 错误码挂载规则（§5.4）、错误目录快照、OpenAPI 文档装配与生成期断言。
  *
  * 依赖是有向无环的：`schemas/*` ← `operations.ts` ← `openapi.ts` ← 本文件。
@@ -84,4 +84,50 @@ export const unitManifest: UnitManifest = {
   spec: 'ZLQ-153 §1.3 packages/api-contract / 附录 A §3.1-§3.5',
   skeletonOnly: false,
   dependsOn: ['@littleq/domain'],
+};
+
+/**
+ * 就绪声明的形状（ZLQ-194 §9.2 规则 3）。
+ *
+ * 与 `@littleq/domain` 的同名类型各自声明、互不 import —— 见上面 `UnitManifest` 的注释：
+ * 契约层依赖领域层这条边不该为一个纯治理元数据接口再多背一个理由。
+ */
+export type UnitReadiness = {
+  readonly status: 'skeleton' | 'implemented';
+  /** 本单元对外承诺的能力名。稳定标识符，不是文件名、不是测试数量（§9.2 规则 6）。 */
+  readonly capabilities: readonly string[];
+  /** 能力名 → 本单元 test 目录下的验收测试路径。每条能力都必须有映射。 */
+  readonly acceptanceTests: Readonly<Record<string, string>>;
+};
+
+/**
+ * 就绪声明：本单元已实现，而且**自证**已实现。
+ *
+ * `skeletonOnly: false` 单独存在时只是一个布尔值，翻它不需要证据，所以「已实现」这句话
+ * 可以是一句谎（ZLQ-194 §9.2 要治的正是这个）。下面每一条能力名都会被
+ * `tools/check-unit-readiness.mjs` 的门 3 拿去核对：映射到的测试文件必须真实存在、必须有
+ * 至少一条活着的用例、并且文件里必须出现这个能力名本身。
+ *
+ * 三条能力对应本包作为「唯一事实源」最容易被悄悄破坏的三个性质：
+ *
+ * - `operation-registry-spec-parity` —— 注册表与附录 §5.4 接口表逐字对应。本单新增的
+ *   `pumpTask` / `rotateSecret` / `revokeSecret` 三条正是靠它落在表里，而不是靠谁记得。
+ * - `openapi-snapshot-determinism` —— 同一份源码连续生成两次逐字节相同。`contract:check`
+ *   之所以能当门禁用，前提就是这一条；它一旦不成立，快照对比退化成人肉审阅。
+ * - `secret-never-echoed` —— 秘密值在结构上不存在于任何响应形状里。§7 选项 B 要求 BYO
+ *   凭证可写入、可轮换、可撤销，但**永不回显**；这条能力钉的是「不是文档里没写 value，
+ *   而是 schema 的键集合里根本没有 value」。
+ */
+export const unitReadiness: UnitReadiness = {
+  status: 'implemented',
+  capabilities: [
+    'operation-registry-spec-parity',
+    'openapi-snapshot-determinism',
+    'secret-never-echoed',
+  ],
+  acceptanceTests: {
+    'operation-registry-spec-parity': 'test/operations.test.ts',
+    'openapi-snapshot-determinism': 'test/openapi.test.ts',
+    'secret-never-echoed': 'test/schemas.test.ts',
+  },
 };

@@ -174,6 +174,30 @@ export function plusDaysUtc(value: Timestamp, days: number): Timestamp {
   return parseTimestamp(new Date(base + days * 86_400_000).toISOString());
 }
 
+/**
+ * `plusDaysUtc` 的分钟粒度版本，供会话 TTL 使用。
+ *
+ * 会话的空闲 / 绝对超时以**分钟**计（与 `LockDurationMinutes` 同单位），用天数表达
+ * 「30 分钟空闲超时」会变成 `0.0208…` 这种既不是整数也无法被 `integerValueObject`
+ * 校验的小数。约束与 `plusDaysUtc` 一致：全程 `Date.UTC` / `toISOString`，
+ * 不读宿主时区、不走 locale 格式化。
+ */
+export function plusMinutesUtc(value: Timestamp, minutes: number): Timestamp {
+  if (!Number.isInteger(minutes)) throw DomainError.invalid('Timestamp');
+  const parts = timestampParts(value);
+  if (!parts) throw DomainError.invalid('Timestamp');
+  const base = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+    Number(timestampMillis(parts)),
+  );
+  return parseTimestamp(new Date(base + minutes * 60_000).toISOString());
+}
+
 /** 不透明分页游标：base64url，排序键编码在内部，对外不泄露 SQL offset。 */
 export type Cursor = Branded<string, 'Cursor'>;
 

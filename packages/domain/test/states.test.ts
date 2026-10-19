@@ -224,7 +224,7 @@ describe('状态机：assertTransition 携带业务错误码', () => {
   });
 });
 
-describe('状态机：transitionTable 在加载期拒绝写错的表', () => {
+describe('transition-table-self-check：transitionTable 在加载期拒绝写错的表', () => {
   // 这六条是「表本身是 bug」的负向对照：它们必须抛**普通 Error**（我们代码写错了），
   // 而不是 DomainError（外部输入不合法）。混淆两者会让一个内部 bug 变成 400 返回给学生。
   const badTables: readonly (readonly [string, AnyTable])[] = [

@@ -101,6 +101,40 @@ export const isTaskEventType = taskEventTypeEnum.is;
 export const parseTaskEventType = taskEventTypeEnum.parse;
 
 /**
+ * `POST /tasks/{id}:pump` 的结果分类（附录 §3.2 步骤 5 的单飞推进 + §12.2 的
+ * 「不存在等待完整 QCA 的 HTTP 请求」）。
+ *
+ * 顺序即 OpenAPI `enum` 顺序：从「真的推进了」到「再也不会推进了」，客户端据此决定
+ * 下一步动作 —— 前两个继续轮询，`NO_OP_WAITING` 稍后再试，后两个停。
+ *
+ * - `ADVANCED`：本次 pump 拿到了推进权，完成了一个**有界切片**并提交了新的 revision。
+ * - `COALESCED_IN_FLIGHT`：同一 revision 上已有一次 pump 正在推进。单飞合并：不重复
+ *   推进、不报错、不改 revision。这是「单飞」在 HTTP 层的可见结果 —— 前端轮询与
+ *   多标签页同时轮询都落在这一支。
+ * - `NO_OP_WAITING`：`RETRY_WAIT` 且 `now < nextRunAt`。pump **不得**抹掉退避，
+ *   否则客户端就能用它把 provider 打成筛子。
+ * - `NO_OP_CANCELLING`：任务正在取消，推进与已记录的取消请求直接矛盾。
+ * - `NO_OP_TERMINAL`：终态。无副作用、不复活状态机、不改 revision；要重来请用
+ *   `retryTask`（它有自己的 `TASK_NOT_RETRYABLE` 与 attempt 预算）。
+ *
+ * 三个 `NO_OP_*` 一律是 **200**，不是 409：pump 是幂等的机械推进，「没什么可做的」
+ * 是一次成功的回答，不是冲突。409 只留给 `REVISION_CONFLICT`（客户端拿着旧 revision
+ * 来 pump，而任务已经被别人推进过），因为那种情况下客户端**必须**重新 GET 才能继续，
+ * 用 200 会把这个义务藏起来。
+ */
+export const TASK_PUMP_OUTCOMES = [
+  'ADVANCED',
+  'COALESCED_IN_FLIGHT',
+  'NO_OP_WAITING',
+  'NO_OP_CANCELLING',
+  'NO_OP_TERMINAL',
+] as const;
+export type TaskPumpOutcome = (typeof TASK_PUMP_OUTCOMES)[number];
+const taskPumpOutcomeEnum = stringEnum<TaskPumpOutcome>('TaskPumpOutcome', TASK_PUMP_OUTCOMES);
+export const isTaskPumpOutcome = taskPumpOutcomeEnum.is;
+export const parseTaskPumpOutcome = taskPumpOutcomeEnum.parse;
+
+/**
  * 「写项目任务」= 会产生或修改项目产物内容的任务。
  *
  * `PUBLISH` 与 `RESCAN` 只作用于**已提交的不可变版本**（架构 §6.6：额度为零时

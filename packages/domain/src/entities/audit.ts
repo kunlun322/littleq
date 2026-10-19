@@ -27,9 +27,19 @@ import { brand, type Branded } from '../value-objects/brand.js';
 import { stringEnum } from '../value-objects/enum.js';
 
 /**
- * 可审计的动作。与 §5.4 的 28 个 operation 对应，但**不是**一一对应：
+ * 可审计的动作。与 operation 表对应，但**不是**一一对应：
  * 纯读取（`GET /tasks/{id}`、`GET /projects`）不产生审计行 —— 审计表是
  * 「谁改了什么、谁被拒绝了」的记录，把每次轮询都写进去会淹掉真正的事件。
+ *
+ * `TASK_PUMP` 因此**不在**这个列表里，尽管它是个写接口：pump 是前端单飞轮询驱动的
+ * 高频幂等推进，一次完整回合会产生几十条，写进审计表正好是被上面那句话禁止的事。
+ * pump 真正需要留痕的时刻（推进到了哪个状态、失败在哪个 stage）已经由 `task_events`
+ * 记录，那是任务自己的事件流，不是审计流。
+ *
+ * `SECRET_ROTATE` / `SECRET_REVOKE` 则必须在：轮换与撤销是低频且直接改变「谁能调用
+ * provider」的动作，事后要能回答「这个凭证是什么时候被谁停用的」。把它们折进
+ * `SECRET_PUT` 会让「写入」与「停用」在审计里长得一样 —— 与本文件对 `DENIED` /
+ * `ERROR` 的区分是同一条理由。
  */
 export const AUDIT_ACTIONS = [
   'LOGIN',
@@ -57,6 +67,8 @@ export const AUDIT_ACTIONS = [
   'WORK_DELETE',
   'WORK_RESTORE',
   'SECRET_PUT',
+  'SECRET_ROTATE',
+  'SECRET_REVOKE',
   'USAGE_LIMIT_UPDATE',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

@@ -1,7 +1,7 @@
 /**
  * 契约层的公共词汇：线上原语、枚举、分页信封、错误 envelope、响应头与 operation 类型。
  *
- * 为什么 `schemas/common.ts` 里既有 schema 又有类型：`operations.ts` 声明 28 条数据、
+ * 为什么 `schemas/common.ts` 里既有 schema 又有类型：`operations.ts` 声明 31 条数据、
  * `openapi.ts` 做错误码挂载与文档派生，两者都需要 `OperationContract` 这套类型。把类型
  * 放进 `operations.ts` 会让 `openapi.ts → operations.ts` 变成数据与类型的混合依赖，
  * 放进 `openapi.ts` 则会让 `operations.ts → openapi.ts` 成环。放在公共层，依赖图是
@@ -36,6 +36,7 @@ import {
   SECRET_KINDS,
   TASK_EVENT_TYPES,
   TASK_KINDS,
+  TASK_PUMP_OUTCOMES,
   TASK_STAGES,
   TASK_STATES,
   USAGE_PERIODS,
@@ -275,6 +276,17 @@ export const promptSchema = z
  * （§5.5 的对外资源里没有 publication 表示，`Work` 只带 `latestPublicationId`）
  * 刻意没有 wire schema。给它们注册 schema 会让 `components.schemas` 出现无人引用的
  * 成员，读者会误以为存在对应的接口。
+ *
+ * 另外三组同样刻意不上线，但理由不是「没有对应接口」，而是**上线会泄漏判定依据**：
+ *
+ * - `ACCOUNT_SESSION_STATUSES` / `ACCOUNT_SESSION_REVOCATION_REASONS` —— 会话是服务端
+ *   凭据面，wire 上只有 cookie 本身（`CookieAuth`）。把 `EXPIRED` 与 `REVOKED` 分开
+ *   回显，等于给探测者一个「这条 cookie 曾经有效过」的预言机；两者一律映射同一个
+ *   `AUTHENTICATION_REQUIRED`。
+ * - `SECRET_SOURCES` —— 「部署型 / 用户型」是**为什么这次写入被拒**的解释，不是资源的
+ *   对外属性。两类凭证的拒绝码都是 `SECRET_IMMUTABLE_REDEPLOY_REQUIRED`，所以 UI 无法
+ *   预先禁用按钮，只能吃一次 409；要改这一点需要先扩 `SecretMetadata` 的键集合，那是
+ *   响应字段变更（不在 §4.2 已证明兼容的清单里），需要架构师裁定。
  */
 export const accountStatusSchema = z.enum(ACCOUNT_STATUSES).meta({ id: 'AccountStatus' });
 export const ageBandSchema = z.enum(AGE_BANDS).meta({ id: 'AgeBand' });
@@ -291,6 +303,7 @@ export const taskKindSchema = z.enum(TASK_KINDS).meta({ id: 'TaskKind' });
 export const taskStateSchema = z.enum(TASK_STATES).meta({ id: 'TaskState' });
 export const taskStageSchema = z.enum(TASK_STAGES).meta({ id: 'TaskStage' });
 export const taskEventTypeSchema = z.enum(TASK_EVENT_TYPES).meta({ id: 'TaskEventType' });
+export const taskPumpOutcomeSchema = z.enum(TASK_PUMP_OUTCOMES).meta({ id: 'TaskPumpOutcome' });
 export const capabilitySchema = z.enum(CAPABILITIES).meta({ id: 'Capability' });
 export const usagePeriodSchema = z.enum(USAGE_PERIODS).meta({ id: 'UsagePeriod' });
 export const usageUnitSchema = z.enum(USAGE_UNITS).meta({ id: 'UsageUnit' });
@@ -598,7 +611,7 @@ export interface OperationContract {
 /**
  * 单对象路径参数 `{id}`。
  *
- * 28 条 operation 里有 12 条用它。注册成一个具名 component 而不是各处内联，是为了让
+ * 31 条 operation 里有 13 条用它。注册成一个具名 component 而不是各处内联，是为了让
  * 快照里「哪些接口按对象 id 寻址」这件事只有一处拼写 —— 将来若要把实体 ID 换成别的
  * 形状（附录 A §6.4 允许线上表示独立演进），改这一个 schema 即可，且 §4.2 的
  * 破坏性比较会立刻在所有引用点同时报出。

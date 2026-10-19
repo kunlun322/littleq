@@ -184,7 +184,7 @@ describe('ErrorEnvelope 的字段集合与 domain 常量逐字一致', () => {
 });
 
 describe('结构上不存在的字段（否定式约束）', () => {
-  it('SecretMetadata 没有 value 键（§5.5：秘密值永不回显）', () => {
+  it('secret-never-echoed：SecretMetadata 没有 value 键（§5.5：秘密值永不回显）', () => {
     expect(Object.keys(secretMetadataSchema.shape)).toEqual([
       'kind',
       'configured',

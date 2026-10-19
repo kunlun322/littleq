@@ -18,7 +18,7 @@
  *
  * ## 刻意**不**做的事
  *
- * 不把 28 条 operation 的**完整推导结果**（共享码 ∪ 专属码）再抄一份成 28 行期望值。
+ * 不把 31 条 operation 的**完整推导结果**（共享码 ∪ 专属码）再抄一份成 31 行期望值。
  * 那会造成第三个 oracle：registry、SPEC_TABLE、推导结果表三份东西互相校验，而真正的
  * 权威只有 §5.4 与已提交快照。所以共享码的推导规则只挑**能区分规则分支**的少数几条
  * 定点断言（见「共享码推导」那组），全量对应交给 §4.4(5) 的覆盖率断言与快照本身。
@@ -130,6 +130,12 @@ const SPEC_TABLE = [
     exclusive: ['TASK_NOT_RETRYABLE', 'ACTIVE_WRITE_TASK_EXISTS', 'USAGE_LIMIT_EXCEEDED'],
   },
   {
+    method: 'post',
+    path: '/tasks/{id}:pump',
+    operationId: 'pumpTask',
+    exclusive: ['REVISION_CONFLICT'],
+  },
+  {
     method: 'get',
     path: '/projects/{id}/versions',
     operationId: 'listProjectVersions',
@@ -183,6 +189,26 @@ const SPEC_TABLE = [
     method: 'put',
     path: '/settings/secrets/{kind}',
     operationId: 'putSecret',
+    exclusive: [
+      'FORBIDDEN_CAPABILITY',
+      'SECRET_KIND_UNSUPPORTED',
+      'SECRET_IMMUTABLE_REDEPLOY_REQUIRED',
+    ],
+  },
+  {
+    method: 'post',
+    path: '/settings/secrets/{kind}:rotate',
+    operationId: 'rotateSecret',
+    exclusive: [
+      'FORBIDDEN_CAPABILITY',
+      'SECRET_KIND_UNSUPPORTED',
+      'SECRET_IMMUTABLE_REDEPLOY_REQUIRED',
+    ],
+  },
+  {
+    method: 'post',
+    path: '/settings/secrets/{kind}:revoke',
+    operationId: 'revokeSecret',
     exclusive: [
       'FORBIDDEN_CAPABILITY',
       'SECRET_KIND_UNSUPPORTED',
@@ -281,7 +307,7 @@ describe('SPEC_TABLE 自身是自洽的（否则下面的「两侧一致」会�
   });
 });
 
-describe('registry 与 §5.4 接口表逐字对应', () => {
+describe('operation-registry-spec-parity：registry 与 §5.4 接口表逐字对应', () => {
   it('条目数一致，且 (method, path, operationId) 三元组按表格顺序逐项相等', () => {
     expect(operationRegistry.length).toBe(SPEC_TABLE.length);
     // 一条断言同时钉住三件事：顺序、路由拼写、operationId。任何一处漂移都会在这里红，

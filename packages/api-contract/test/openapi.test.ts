@@ -136,7 +136,7 @@ function errorCodesExtension(operation: OperationJson): unknown {
 
 const RETRY_AFTER_STATUSES: readonly string[] = ['429', '503'];
 
-describe('§4.4(1) 确定性：同一源码连续生成两次 byte-identical', () => {
+describe('openapi-snapshot-determinism：§4.4(1) 确定性 —— 同一源码连续生成两次 byte-identical', () => {
   it('两次生成的序列化字节完全相同', () => {
     const first = generated();
     const second = generated();

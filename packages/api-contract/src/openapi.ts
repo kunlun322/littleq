@@ -117,7 +117,7 @@ export type OpenApiDocument = ReturnType<typeof createDocument>;
  * 除 login/public/license/health 外的业务接口共享 `AUTHENTICATION_REQUIRED`；
  * 所有写接口共享 `CSRF_REJECTED`；对象型接口共享 `RESOURCE_NOT_FOUND`。
  *
- * 这四条在这里全部**从 operation 已声明的事实推导**，而不是在 28 条声明里各抄一遍：
+ * 这四条在这里全部**从 operation 已声明的事实推导**，而不是在 31 条声明里各抄一遍：
  *
  * | 共享码 | 推导依据 | 为什么这个依据是对的 |
  * | --- | --- | --- |
@@ -801,7 +801,7 @@ function buildPaths(): ZodOpenApiPathsObject {
  * 文档级 `security` **不设**。§5.5 要求公开接口显式写 `security: []`，而空数组与
  * 「未声明」的区别正是「不继承顶层」；既然每条 operation 都自带 security，设一个顶层
  * 值只会制造一条永远不该被用到的继承路径。`test/openapi.test.ts` 断言生成产物里
- * 28 个 operation 全部带显式 `security` 数组。
+ * 31 个 operation 全部带显式 `security` 数组。
  */
 export function createOpenApiDocument(): OpenApiDocument {
   assertOperationRegistryWellFormed(operationRegistry);

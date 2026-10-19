@@ -8,13 +8,14 @@
  *
  * - `value-objects/` —— 不可变、构造即校验的原子值（ID、枚举、时间、游标、摘要、
  *   不透明引用）。每个值对象自带 `is*` / `parse*`，`parse*` 失败抛 `DomainError`。
- * - `states/` —— 通用迁移表机制（`transitionTable` 在模块加载期自检）与 11 张具体状态机。
+ * - `states/` —— 通用迁移表机制（`transitionTable` 在模块加载期自检）与 12 张具体状态机。
  * - `errors/` —— 42 个领域错误码的冻结目录、`DomainError`、以及 `(taskKind, stage)`
  *   异步错误登记表。
  * - `entities/` —— 9 个聚合（Account / Group / Project / Work / Task / Usage /
  *   Teaching / Reward / Audit）。构造期校验 + 不可变更新：每个 `create*` 返回前跑完
  *   全部不变量，每个变更函数返回**新对象**并推进 `revision`。
- * - `policies/` —— 纯决策函数：任务准入、用量准入与结算、`(stage, code)` 重试表、租约条件。
+ * - `policies/` —— 纯决策函数：任务准入、用量准入与结算、`(stage, code)` 重试表、租约条件、
+ *   `:pump` 的单飞推进判定、账号会话的签发 / 触摸 / 撤销。
  *
  * ## 边界
  *
@@ -63,4 +64,54 @@ export const unitManifest: UnitManifest = {
   layer: 'domain',
   spec: 'ZLQ-153 §1.3 packages/domain',
   skeletonOnly: false,
+};
+
+/**
+ * 就绪声明的形状（ZLQ-194 §9.2 规则 3）。
+ *
+ * 与 `@littleq/api-contract` 的同名类型各自声明、互不 import，理由与那个包里
+ * `UnitManifest` 的注释逐字相同：不为一个纯治理元数据接口去背一条跨单元依赖边。
+ */
+export type UnitReadiness = {
+  readonly status: 'skeleton' | 'implemented';
+  /** 本单元对外承诺的能力名。稳定标识符，不是文件名、不是测试数量（§9.2 规则 6）。 */
+  readonly capabilities: readonly string[];
+  /** 能力名 → 本单元 test 目录下的验收测试路径。每条能力都必须有映射。 */
+  readonly acceptanceTests: Readonly<Record<string, string>>;
+};
+
+/**
+ * 就绪声明：本单元已实现，而且**自证**已实现。
+ *
+ * 只有上面那个 `skeletonOnly: false` 是不够的 —— 它是一个布尔值，翻动它不需要提交任何
+ * 证据，所以「已实现」这句话本身可以是一句谎（ZLQ-194 §9.2 要治的正是这个）。下面每一条
+ * 能力名都会被 `tools/check-unit-readiness.mjs` 的门 3 拿去核对：映射到的测试文件必须真实
+ * 存在、必须有至少一条活着的用例、并且文件里必须出现这个能力名本身。最后一条是防「把能力
+ * 指向一个无关的既有测试来充数」。
+ *
+ * 能力名刻意取成契约概念（`pump-single-flight` 而不是 `task-pump.test.ts`）：文件名会随
+ * 重构改动而能力不该跟着改；反过来，谁把测试文件改了名而忘了改映射，门 3 立刻红。
+ *
+ * 五条里有两条（`error-catalog-frozen`、`transition-table-self-check`）证明的不是本单元
+ * 新增的功能，而是新增功能必须**服从**的既有约束：`:pump`、Secret 的 `:rotate` 与
+ * `:revoke`、账号会话的失效判定，全部只能用目录里现有的 42 个错误码表达（新增一个码在
+ * `contract:control` 里是破坏性变更），也全部只能靠迁移表来回答「这是不是终态」。把这两条
+ * 写进声明，等于让本单赖以前提的两个约束从此有门禁看守，而不是只写在注释里。
+ */
+export const unitReadiness: UnitReadiness = {
+  status: 'implemented',
+  capabilities: [
+    'pump-single-flight',
+    'secret-rotate-revoke',
+    'session-ttl-and-revocation',
+    'error-catalog-frozen',
+    'transition-table-self-check',
+  ],
+  acceptanceTests: {
+    'pump-single-flight': 'test/task-pump.test.ts',
+    'secret-rotate-revoke': 'test/secret-lifecycle.test.ts',
+    'session-ttl-and-revocation': 'test/session.test.ts',
+    'error-catalog-frozen': 'test/errors.test.ts',
+    'transition-table-self-check': 'test/states.test.ts',
+  },
 };

@@ -16,6 +16,7 @@ import {
   taskEventIdSchema,
   taskEventTypeSchema,
   taskKindSchema,
+  taskPumpOutcomeSchema,
   taskStageSchema,
   taskStateSchema,
   timestampSchema,
@@ -130,3 +131,23 @@ export const retryTaskRequestSchema = z
     reason: operatorNoteSchema.optional(),
   })
   .meta({ id: 'RetryTaskRequest' });
+
+/**
+ * `POST /tasks/{id}:pump` 的响应。
+ *
+ * 带完整 `Task` 而不是只带 `taskId` + `outcome`，是为了让客户端能**接着 pump**：单飞
+ * 轮询的每一轮都要拿新的 `revision` 去填下一次请求的 `If-Match`，只回 outcome 会逼客户端
+ * 在两次 pump 之间多打一次 `GET /tasks/{id}`，而 §12.2 要求整条链路里没有一个请求在等
+ * 完整回合 —— 少一次往返就是少一次可能超时的地方。
+ *
+ * `outcome` 是这次 pump 的**结果分类**，不是任务状态：任务状态在 `task.state` 里。两者
+ * 必须分开，因为「什么都没做」有好几种互不相同的原因（在等退避 / 正在被取消 / 已经终态），
+ * 而它们在 `task.state` 上可能长得一样。
+ */
+export const taskPumpResultSchema = z
+  .object({
+    taskId: uuidV7Schema,
+    outcome: taskPumpOutcomeSchema,
+    task: taskSchema,
+  })
+  .meta({ id: 'TaskPumpResult' });

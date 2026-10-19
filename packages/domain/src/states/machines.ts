@@ -1,5 +1,6 @@
 import { DomainError } from '../errors/domain-error.js';
 import { ACCOUNT_STATUSES, type AccountStatus } from '../value-objects/account.js';
+import { ACCOUNT_SESSION_STATUSES, type AccountSessionStatus } from '../value-objects/session.js';
 import { GROUP_STATUSES, type GroupStatus } from '../value-objects/group.js';
 import { PROJECT_STATUSES, type ProjectStatus } from '../value-objects/project.js';
 import {
@@ -20,10 +21,15 @@ import {
   type LearningProgressState,
   type SubmissionStatus,
 } from '../value-objects/teaching.js';
-import { canTransition, transitionTable, type TransitionTable } from './transition.js';
+import {
+  canTransition,
+  isTerminalState,
+  transitionTable,
+  type TransitionTable,
+} from './transition.js';
 
 /**
- * 十一张状态迁移表 —— 附录 A §6.2「补齐未定义状态」的机器可读形态。
+ * 十二张状态迁移表 —— 附录 A §6.2「补齐未定义状态」的机器可读形态。
  *
  * 每张表的 `states` 直接复用值对象层的枚举常量，因此「枚举有哪些成员」只有一个
  * 事实源；OpenAPI 的 `enum` 也从同一处派生，顺序一致（附录 A §4.1 要求 enum 的
@@ -49,6 +55,35 @@ export const USER_TRANSITIONS: TransitionTable<AccountStatus> = transitionTable<
 });
 
 export const USER_INITIAL_STATUS: AccountStatus = 'ACTIVE';
+
+/**
+ * AccountSession：`ACTIVE → EXPIRED | REVOKED`，两个都是终态。
+ *
+ * 分成两个终态而不是一个 `INACTIVE`，是因为它们的**证据不同**：`EXPIRED` 由时间推导
+ * （`now >= min(空闲, 绝对)`，扫描任务把推导结果落库），`revokedAt` 保持 `null`；
+ * `REVOKED` 由一次决定产生（注销 / 改密 / 管理员强制 / 账号锁定 / 账号删除），
+ * `revokedAt` 与 `revocationReason` 必须同时非空。合并成一个状态就把「谁结束的这条
+ * 会话」这个审计事实丢掉了，而 §5 恰恰要求可追溯。
+ *
+ * 没有回到 `ACTIVE` 的边：一条会话结束后不能复活，用户再登录是**签发一条新会话**。
+ * 这与 `Submission` 的「重交创建新的 Submission，不覆盖历史」是同一条设计取向 ——
+ * 身份凭据尤其不该有可复活的历史行，否则「旧 cookie 又能用了」这类问题无从排查。
+ *
+ * `ACTIVE → EXPIRED` 与 `ACTIVE → REVOKED` 之间也没有边：超时之后再撤销是同一条会话
+ * 上的第二次结束，没有意义。
+ */
+export const ACCOUNT_SESSION_TRANSITIONS: TransitionTable<AccountSessionStatus> =
+  transitionTable<AccountSessionStatus>({
+    name: 'AccountSessionStatus',
+    states: ACCOUNT_SESSION_STATUSES,
+    terminal: ['EXPIRED', 'REVOKED'],
+    edges: [
+      { from: 'ACTIVE', to: 'EXPIRED' },
+      { from: 'ACTIVE', to: 'REVOKED' },
+    ],
+  });
+
+export const ACCOUNT_SESSION_INITIAL_STATUS: AccountSessionStatus = 'ACTIVE';
 
 /**
  * Group：`ACTIVE ↔ ARCHIVED`。归档后只读、作品保留，Owner 可以解档，所以 ARCHIVED
@@ -201,6 +236,33 @@ export function assertCancellableTaskState(state: TaskState): void {
   if (!isCancellableTaskState(state)) throw new DomainError('TASK_NOT_CANCELLABLE', 'TaskState');
 }
 
+/**
+ * 可被 `:pump` 推进的状态：**从迁移表派生**，即「非终态，且不是 `CANCELLING`」。
+ *
+ * 派生结果是 9 个：`QUEUED`、`CLAIMED`、`SESSION_CREATING`、`RUNNING`、`COLLECTING`、
+ * `REPAIRING`、`VALIDATING`、`COMMITTING`、`RETRY_WAIT`。
+ *
+ * - **终态不在集合里**，这是 §12.2「完整回合由多个 pump 完成」的安全边界：一个已经
+ *   `SUCCEEDED` / `FAILED` / `CANCELLED` 的任务再收 pump 必须是无副作用的 no-op
+ *   （200 + `NO_OP_TERMINAL`），既不重开状态机、也不复活 Session、也不改 revision。
+ *   否则「前端单飞轮询」就等价于「无限重试」，而重试是 `retryTask` 的语义，
+ *   有自己的 `TASK_NOT_RETRYABLE` 与 attempt 预算。
+ * - **`CANCELLING` 不在集合里**：它正在被拆除，再推进一步工作会与已经记录的取消请求
+ *   直接矛盾。注意这与可取消集合的处理**相反** —— `CANCELLING` 可以再收一次取消
+ *   （取消是幂等的），但不可以再收一次推进。
+ * - **`RETRY_WAIT` 在集合里**，但能不能真的推进还要看 `nextRunAt`：等待期内的 pump
+ *   返回 `NO_OP_WAITING` 而不是把任务提前放回队列。少了这道时间闸，客户端就能用
+ *   pump 抹掉退避、把 provider 打成筛子；过了 `nextRunAt` 之后，pump 与租约扫描
+ *   谁能先把它推回 `QUEUED` 就谁赢，两者都走同一条 CAS，不会产生两次推进。
+ */
+export const PUMPABLE_TASK_STATES: readonly TaskState[] = TASK_TRANSITIONS.states.filter(
+  (state) => !isTerminalState(TASK_TRANSITIONS, state) && state !== 'CANCELLING',
+);
+
+export function isPumpableTaskState(state: TaskState): boolean {
+  return (PUMPABLE_TASK_STATES as readonly string[]).includes(state);
+}
+
 /** UsageReservation：`HELD → COMMITTED/RELEASED/EXPIRED`，三个都是终态，不可回退。 */
 export const RESERVATION_TRANSITIONS: TransitionTable<ReservationState> =
   transitionTable<ReservationState>({
@@ -289,6 +351,11 @@ export const LEARNING_PROGRESS_INITIAL_STATE: LearningProgressState = 'NOT_START
  * ——排序是为了让任何遍历结果与宿主、与声明顺序都无关。
  */
 export const TRANSITION_TABLES = [
+  {
+    name: 'AccountSessionStatus',
+    table: ACCOUNT_SESSION_TRANSITIONS,
+    initial: ACCOUNT_SESSION_INITIAL_STATUS,
+  },
   { name: 'AccountStatus', table: USER_TRANSITIONS, initial: USER_INITIAL_STATUS },
   { name: 'AssignmentStatus', table: ASSIGNMENT_TRANSITIONS, initial: ASSIGNMENT_INITIAL_STATUS },
   { name: 'CourseStatus', table: COURSE_TRANSITIONS, initial: COURSE_INITIAL_STATUS },
