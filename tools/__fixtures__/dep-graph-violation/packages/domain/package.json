@@ -6,6 +6,7 @@
   "license": "AGPL-3.0-only",
   "dependencies": {
     "@nestjs/common": "0.0.0-fixture",
-    "pg": "0.0.0-fixture"
+    "pg": "0.0.0-fixture",
+    "@neondatabase/serverless": "0.0.0-fixture"
   }
 }

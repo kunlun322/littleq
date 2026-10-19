@@ -10,7 +10,7 @@
   //                                    **真实闭包**上的对照，证明线上那两件配置承重：
   //                                    caniuse-lite 的精确裁定与 pnpm-workspace.yaml 的
   //                                    sharp override（断言条数由它自己运行时打印，不写死在这里）
-  //   tools/check-dependency-graph.mjs --expect-failures 8   故意植入的 8 处违规必须全部命中
+  //   tools/check-dependency-graph.mjs --expect-failures 14  故意植入的 14 处违规必须全部命中
   //   tools/contracts/control.mjs      契约门禁对照：每条方差规则一对红/绿 fixture，
   //                                    基线不可得与 bootstrap 只允许一次也各有专例
   // 产品代码（apps/* packages/* 的 .ts）与 *.config.ts 仍然是全严格类型检查。

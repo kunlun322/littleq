@@ -21,7 +21,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "dep-graph": "node tools/check-dependency-graph.mjs",
-    "dep-graph:control": "node tools/check-dependency-graph.mjs --root tools/__fixtures__/dep-graph-violation --expect-failures 8",
+    "dep-graph:control": "node tools/check-dependency-graph.mjs --root tools/__fixtures__/dep-graph-violation --expect-failures 14",
     "license:scan": "node tools/license/scan.mjs",
     "license:scan:strict": "node tools/license/scan.mjs --strict",
     "license:registry-facts": "node tools/license/registry-facts.mjs",

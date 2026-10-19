@@ -1,0 +1,11 @@
+{
+  "name": "@littleq/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "@littleq/api": "workspace:*",
+    "server-only": "0.0.0-fixture"
+  }
+}

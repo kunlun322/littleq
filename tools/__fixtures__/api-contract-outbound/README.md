@@ -6,8 +6,11 @@
 
 主夹具 `tools/__fixtures__/dep-graph-violation` 证明的是同一条规则的**入向** `inbound`
 （第 8 处违规：`apps/runtime → packages/api-contract`）。两个方向分树，是因为入向违规
-的计数被根 `package.json` 的 `--expect-failures 8` 锁死，往主夹具里再塞一处出向违规就会
-把那个数字变成 9，而 PM 已裁定五处锁步更新只覆盖 7 → 8 这一次变化。
+的计数被根 `package.json` 的 `--expect-failures 14` 锁死，往主夹具里再塞一处出向违规
+就要跟着改那串锁步文案。ZLQ-195 §3.3 已经要求把这个数字写成实测值（8 → 13，
+再因 §3.4 的依赖冻结补上 `@neondatabase/` 一处 → 14），
+所以「计数不许再动」这条早先的裁定不再成立；但**分树**本身仍然有意义：
+出向与入向的归因分开，读输出的人不必在一堆 14 行里分辨方向。
 
 本树由 `tools/test/dependency-graph.test.mjs` 调用**同一个生产 checker**
 （`tools/check-dependency-graph.mjs`，策略仍是仓库里真实那一份）验证：

@@ -24,7 +24,8 @@
     "@littleq/work-contract": "workspace:*",
     "next": "16.4.2",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "server-only": "0.0.1"
   },
   "devDependencies": {
     "@types/node": "26.6.5",

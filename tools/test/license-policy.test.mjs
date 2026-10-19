@@ -299,7 +299,7 @@ describe('真实 lockfile 闭包的审计结论', () => {
     expect(result.entries.some((item) => item.name === 'pnpm')).toBe(true);
   });
 
-  it('生产依赖集合是被显式钉住的：契约层仍是 zod + zod-openapi，其余全部由 next 的构建闭包引入', () => {
+  it('生产依赖集合是被显式钉住的：next 构建闭包 + 契约层 + ZLQ-195 §3.4 冻结面及其传递闭包', () => {
     // ZLQ-190 之前这里钉的是 `['zod-openapi@6.0.2', 'zod@4.6.7']`：当时 apps/web 还是库形态，
     // 运行时分发面确实只有契约层这两个包。ZLQ-190 把它变成真实的 Next 静态站点后，
     // 生产闭包必然扩大 —— 设计文档 §6.3 明确要求「生成清单必须如实反映分类变化」，
@@ -310,6 +310,15 @@ describe('真实 lockfile 闭包的审计结论', () => {
     // caniuse-lite 就是例子（它的批准是精确版本的，换版本即失配并要求重新裁定）。
     // 因此框架升级会让这条测试变红，这是设计意图（§6.3「框架升级带来新版本时重新裁定」），
     // 不是需要放宽的噪声。
+    //
+    // ZLQ-195 §3.4 让这张表从 28 行变成 102 行：D0 一次性冻结 D1–D6 的第三方依赖，
+    // 于是 Neon / pg / S3 / Blob / cookie / server-only 及其全部传递依赖进入生产闭包。
+    // **逐项过了一遍**（§3.4 的硬要求）：102 项的许可档位落在 MIT(58) / Apache-2.0(35)
+    // / ISC(6) / CC-BY-4.0(1) / BSD-3-Clause(1) / 0BSD(1)，全部命中 policy.allowed 六项白名单
+    // （CC-BY-4.0 走既有的 caniuse-lite 精确版本裁定），因此
+    // **待架构师裁定 0 项、禁止 0 项、无法解析 0 项**，没有往 allowed 里塞任何新条目，
+    // 也没有新增 adjudications。下面按「谁把它带进来的」分块，每块头一行写明来源，
+    // 这样将来删掉某个冻结条目时能一眼看出该连带删掉哪一段。
     const prod = result.entries
       .filter((item) => item.kind === 'prod')
       .map((item) => `${item.name}@${item.version}`)
@@ -357,13 +366,121 @@ describe('真实 lockfile 闭包的审计结论', () => {
         // API 契约层的运行时分发面
         'zod@4.6.7',
         'zod-openapi@6.0.2',
+        // ── 以下 74 项全部由 ZLQ-195 §3.4 的依赖冻结带入 ──────────────────────
+        // 冻结条目 session-cookie（apps/api）与 server-only-guard（apps/api + apps/web）：
+        // 设计 §3.2 步骤 2 的 HttpOnly; Secure; SameSite=Lax 会话 Cookie，
+        // 与 §4.3「apps/api 暴露一个 server-only 受控入口」的编译期守卫。均 MIT。
+        'cookie@2.0.1',
+        'server-only@0.0.1',
+        // 冻结条目 neon-serverless-driver（packages/infra）：§6.1 运行时用的池化 URL 驱动。MIT。
+        '@neondatabase/serverless@1.2.0',
+        // 冻结条目 pg-direct-driver（packages/infra）+ pg-types：§6.1 迁移用的直连 URL 驱动。
+        // 其余 12 项是 pg 自己的传递闭包（pgpass → split2、postgres-interval → xtend 等）。
+        // pg / pg-* 为 MIT，pg-int8 与 split2 为 ISC，均在白名单内。
+        'pg@8.23.1',
+        'pg-cloudflare@1.4.1',
+        'pg-connection-string@2.14.1',
+        'pg-int8@1.0.1',
+        'pg-pool@3.14.0',
+        'pg-protocol@1.16.1',
+        'pg-types@2.2.0',
+        'pgpass@1.0.5',
+        'postgres-array@2.0.0',
+        'postgres-bytea@1.0.1',
+        'postgres-date@1.0.7',
+        'postgres-interval@1.2.0',
+        'split2@4.2.0',
+        'xtend@4.0.2',
+        // 冻结条目 s3-client + s3-request-presigner（packages/infra）：§6.2 ObjectStore 的
+        // S3 兼容实现与短期只读 URL 预签名。@aws-sdk/* 与 @smithy/* 为 Apache-2.0，
+        // bowser（UA 解析，@aws-sdk/core 的传递依赖）为 MIT。
+        '@aws-sdk/checksums@3.1001.3',
+        '@aws-sdk/client-s3@3.1152.0',
+        '@aws-sdk/core@3.978.3',
+        '@aws-sdk/credential-provider-env@3.972.74',
+        '@aws-sdk/credential-provider-http@3.972.76',
+        '@aws-sdk/credential-provider-ini@3.973.19',
+        '@aws-sdk/credential-provider-login@3.972.81',
+        '@aws-sdk/credential-provider-node@3.972.86',
+        '@aws-sdk/credential-provider-process@3.972.74',
+        '@aws-sdk/credential-provider-sso@3.973.18',
+        '@aws-sdk/credential-provider-web-identity@3.972.80',
+        '@aws-sdk/middleware-sdk-s3@3.972.79',
+        '@aws-sdk/nested-clients@3.997.48',
+        '@aws-sdk/s3-request-presigner@3.1152.0',
+        '@aws-sdk/signature-v4-multi-region@3.996.48',
+        '@aws-sdk/token-providers@3.1150.0',
+        '@aws-sdk/types@3.974.6',
+        '@aws-sdk/xml-builder@3.972.41',
+        '@aws/lambda-invoke-store@0.3.0',
+        '@smithy/core@3.36.0',
+        '@smithy/credential-provider-imds@4.5.2',
+        '@smithy/fetch-http-handler@5.8.0',
+        '@smithy/node-http-handler@4.12.1',
+        '@smithy/signature-v4@5.7.4',
+        '@smithy/types@4.19.0',
+        'bowser@2.14.1',
+        // 冻结条目 vercel-blob-alternative（packages/infra）：C21 Vercel-first 下的另一条
+        // ObjectStore 实现路径。**它的 §6.2 适配性存疑（Blob URL 是公开混淆 URL，
+        // 无过期、无预签名），已在契约的 caveat 里显式上报待架构师裁定** —— 按 §3.4
+        // 「宁可多冻一个并注明可能用不到」的原则先冻住，裁定若判 S3 胜出，
+        // 本块与下一块共 31 项可整体摘除，不影响其余七个条目。Apache-2.0。
+        '@vercel/blob@2.8.2',
+        'undici@6.29.1',
+        'throttleit@2.1.0',
+        'async-retry@1.3.3',
+        'retry@0.13.1',
+        'is-buffer@2.0.5',
+        'is-node-process@1.2.0',
+        // @vercel/blob 的 OIDC / CLI 闭包：@vercel/blob → @vercel/oidc → @vercel/cli-config
+        // 与 @vercel/cli-exec。这 24 项不是我们选的，是 Blob 取运行时凭证的方式带进来的，
+        // 也是「冻一个 Blob = 生产闭包多 31 行」这笔账的全部来源。
+        // **代价已上报**：@vercel/cli-config 钉了 zod@4.1.11，于是闭包里出现第二个 zod。
+        // 刻意没有加 overrides 去合并它 —— 当前仓库还没有任何代码 import Blob，
+        // 合并后无法用测试证明「契约层的 zod@4.6.7 行为未变」，而 pnpm-workspace.yaml 的
+        // overrides 又与 license:control 的 caseSharpOverride 变异用例相互牵制。
+        // 两个 zod 均为 MIT，无许可风险，只有体积与版本漂移风险。
+        '@vercel/oidc@3.8.10',
+        '@vercel/cli-config@0.3.1',
+        '@vercel/cli-exec@1.0.1',
+        'jose@5.10.0',
+        'zod@4.1.11',
+        'xdg-app-paths@5.5.1',
+        'xdg-portable@7.3.0',
+        'os-paths@4.4.0',
+        'execa@5.1.1',
+        'cross-spawn@7.0.6',
+        'which@2.0.2',
+        'isexe@2.0.0',
+        'shebang-command@2.0.0',
+        'shebang-regex@3.0.0',
+        'path-key@3.1.1',
+        'npm-run-path@4.0.1',
+        'get-stream@6.0.1',
+        'human-signals@2.1.0',
+        'signal-exit@3.0.7',
+        'strip-final-newline@2.0.0',
+        'onetime@5.1.2',
+        'mimic-fn@2.1.0',
+        'merge-stream@2.0.0',
+        'is-stream@2.0.1',
       ].sort(),
     );
 
     // ZLQ-162 时期的裁定（附录 A §3.5 / PM §4.7 精确锁定 6.0.2）没有被推翻：
-    // API 契约层的运行时分发面仍然只有这两个包。单独钉住它，免得这个结论
-    // 在上面的大表里变成噪声 —— 它是许可治理裁定，不是「碰巧只有两个」。
-    expect(prod.filter((id) => id.startsWith('zod'))).toEqual(['zod-openapi@6.0.2', 'zod@4.6.7']);
+    // 仓库**自己声明**的契约层运行时分发面仍然只有 zod@4.6.7 + zod-openapi@6.0.2。
+    // 单独钉住它，免得这个结论在上面的大表里变成噪声 —— 它是许可治理裁定，
+    // 不是「碰巧只有两个」。
+    //
+    // ZLQ-195 §3.4 之后闭包里多了 zod@4.1.11，来源是 @vercel/blob → @vercel/oidc
+    // → @vercel/cli-config（传递依赖，不是契约层声明），所以上面那条裁定的**结论**没变，
+    // 但这条断言的**形状**必须变：改成钉住全部三个，于是「闭包里出现第三个 zod 版本」
+    // 会当场变红，而不是悄悄多一行。
+    expect(prod.filter((id) => id.startsWith('zod'))).toEqual([
+      'zod-openapi@6.0.2',
+      'zod@4.1.11',
+      'zod@4.6.7',
+    ]);
 
     // sharp 及其 libvips 平台二进制家族被 pnpm-workspace.yaml 的精确 override 移除了
     // （ZLQ-190 §6.3：本切片不用图片优化，next.config.ts 的 images.unoptimized 就是前提）。

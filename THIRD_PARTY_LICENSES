@@ -13,8 +13,8 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 
 ## 依赖清单
 
-共 249 个第三方包（项目 lockfile 234 个 + pnpm 自身 15 个）；其中生产依赖 28 个、仅构建/测试期依赖 221 个。
-许可证判定：白名单通过 249，待架构师裁定 0，禁止 0，无法解析 0。
+共 318 个第三方包（项目 lockfile 303 个 + pnpm 自身 15 个）；其中生产依赖 102 个、仅构建/测试期依赖 216 个。
+许可证判定：白名单通过 318，待架构师裁定 0，禁止 0，无法解析 0。
 
 ### 待架构师裁定
 
@@ -24,6 +24,25 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 
 | 包 | 版本 | 许可证 | 类型 | 来源 | 许可证依据 |
 | --- | --- | --- | --- | --- | --- |
+| `@aws-sdk/checksums` | 3.1001.3 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/client-s3` | 3.1152.0 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/core` | 3.978.3 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/credential-provider-env` | 3.972.74 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/credential-provider-http` | 3.972.76 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/credential-provider-ini` | 3.973.19 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/credential-provider-login` | 3.972.81 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/credential-provider-node` | 3.972.86 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/credential-provider-process` | 3.972.74 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/credential-provider-sso` | 3.973.18 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/credential-provider-web-identity` | 3.972.80 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/middleware-sdk-s3` | 3.972.79 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/nested-clients` | 3.997.48 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/s3-request-presigner` | 3.1152.0 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/signature-v4-multi-region` | 3.996.48 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/token-providers` | 3.1150.0 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/types` | 3.974.6 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws-sdk/xml-builder` | 3.972.41 | Apache-2.0 | prod | 项目 | package.json |
+| `@aws/lambda-invoke-store` | 0.3.0 | Apache-2.0 | prod | 项目 | package.json |
 | `@cacheable/memory` | 2.2.0 | MIT | dev | 项目 | package.json |
 | `@cacheable/utils` | 2.5.0 | MIT | dev | 项目 | package.json |
 | `@esbuild/aix-ppc64` | 0.28.2 | MIT | dev | 项目 | 注册表事实快照 |
@@ -70,6 +89,7 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 | `@jridgewell/trace-mapping` | 0.3.31 | MIT | dev | 项目 | package.json |
 | `@keyv/bigmap` | 1.3.1 | MIT | dev | 项目 | package.json |
 | `@keyv/serialize` | 1.1.1 | MIT | dev | 项目 | package.json |
+| `@neondatabase/serverless` | 1.2.0 | MIT | prod | 项目 | package.json |
 | `@next/env` | 16.4.2 | MIT | prod | 项目 | package.json |
 | `@next/swc-darwin-arm64` | 16.4.2 | MIT | prod | 项目 | 注册表事实快照 |
 | `@next/swc-darwin-x64` | 16.4.2 | MIT | prod | 项目 | 注册表事实快照 |
@@ -111,6 +131,12 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 | `@rolldown/binding-win32-arm64-msvc` | 1.2.14 | MIT | dev | 项目 | 注册表事实快照 |
 | `@rolldown/binding-win32-x64-msvc` | 1.2.14 | MIT | dev | 项目 | 注册表事实快照 |
 | `@rolldown/pluginutils` | 1.0.1 | MIT | dev | 项目 | package.json |
+| `@smithy/core` | 3.36.0 | Apache-2.0 | prod | 项目 | package.json |
+| `@smithy/credential-provider-imds` | 4.5.2 | Apache-2.0 | prod | 项目 | package.json |
+| `@smithy/fetch-http-handler` | 5.8.0 | Apache-2.0 | prod | 项目 | package.json |
+| `@smithy/node-http-handler` | 4.12.1 | Apache-2.0 | prod | 项目 | package.json |
+| `@smithy/signature-v4` | 5.7.4 | Apache-2.0 | prod | 项目 | package.json |
+| `@smithy/types` | 4.19.0 | Apache-2.0 | prod | 项目 | package.json |
 | `@swc/helpers` | 0.5.23 | Apache-2.0 | prod | 项目 | package.json |
 | `@types/chai` | 5.2.3 | MIT | dev | 项目 | package.json |
 | `@types/deep-eql` | 4.0.2 | MIT | dev | 项目 | package.json |
@@ -118,6 +144,7 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 | `@types/estree` | 1.0.9 | MIT | dev | 项目 | package.json |
 | `@types/json-schema` | 7.0.15 | MIT | dev | 项目 | package.json |
 | `@types/node` | 26.6.5 | MIT | dev | 项目 | package.json |
+| `@types/pg` | 8.23.1 | MIT | dev | 项目 | package.json |
 | `@types/react` | 19.3.0 | MIT | dev | 项目 | package.json |
 | `@types/react-dom` | 19.3.0 | MIT | dev | 项目 | package.json |
 | `@typescript-eslint/eslint-plugin` | 8.71.2 | MIT | dev | 项目 | package.json |
@@ -151,20 +178,27 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 | `@typescript/typescript-win32-arm64` | 7.0.2 | Apache-2.0 | dev | 项目 | 注册表事实快照 |
 | `@typescript/typescript-win32-x64` | 7.0.2 | Apache-2.0 | dev | 项目 | 注册表事实快照 |
 | `@typescript/typescript6` | 6.0.2 | Apache-2.0 | dev | 项目 | package.json |
+| `@vercel/blob` | 2.8.2 | Apache-2.0 | prod | 项目 | package.json |
+| `@vercel/cli-config` | 0.3.1 | Apache-2.0 | prod | 项目 | package.json |
+| `@vercel/cli-exec` | 1.0.1 | Apache-2.0 | prod | 项目 | package.json |
+| `@vercel/oidc` | 3.8.10 | Apache-2.0 | prod | 项目 | package.json |
 | `@vitest/mocker` | 5.0.5 | MIT | dev | 项目 | package.json |
 | `@vitest/spy` | 5.0.5 | MIT | dev | 项目 | package.json |
 | `acorn` | 8.19.0 | MIT | dev | 项目 | package.json |
 | `acorn-jsx` | 5.3.2 | MIT | dev | 项目 | package.json |
 | `ajv` | 6.15.0 | MIT | dev | 项目 | package.json |
 | `assertion-error` | 2.0.1 | MIT | dev | 项目 | package.json |
+| `async-retry` | 1.3.3 | MIT | prod | 项目 | package.json |
 | `balanced-match` | 4.0.4 | MIT | dev | 项目 | package.json |
 | `baseline-browser-mapping` | 2.11.29 | Apache-2.0 | prod | 项目 | package.json |
+| `bowser` | 2.14.1 | MIT | prod | 项目 | package.json |
 | `brace-expansion` | 5.0.12 | MIT | dev | 项目 | package.json |
 | `cacheable` | 2.5.0 | MIT | dev | 项目 | package.json |
 | `caniuse-lite` | 1.0.30001816 | CC-BY-4.0 | prod | 项目 | package.json |
 | `chai` | 6.3.0 | MIT | dev | 项目 | package.json |
 | `client-only` | 0.0.1 | MIT | prod | 项目 | package.json |
-| `cross-spawn` | 7.0.6 | MIT | dev | 项目 | package.json |
+| `cookie` | 2.0.1 | MIT | prod | 项目 | package.json |
+| `cross-spawn` | 7.0.6 | MIT | prod | 项目 | package.json |
 | `csstype` | 3.2.3 | MIT | dev | 项目 | package.json |
 | `debug` | 4.4.3 | MIT | dev | 项目 | package.json |
 | `deep-is` | 0.1.4 | MIT | dev | 项目 | package.json |
@@ -182,6 +216,7 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 | `estraverse` | 5.3.0 | BSD-2-Clause | dev | 项目 | package.json |
 | `estree-walker` | 3.0.3 | MIT | dev | 项目 | package.json |
 | `esutils` | 2.0.3 | BSD-2-Clause | dev | 项目 | package.json |
+| `execa` | 5.1.1 | MIT | prod | 项目 | package.json |
 | `expect-type` | 1.4.0 | Apache-2.0 | dev | 项目 | package.json |
 | `fast-deep-equal` | 3.1.3 | MIT | dev | 项目 | package.json |
 | `fast-json-stable-stringify` | 2.1.0 | MIT | dev | 项目 | package.json |
@@ -192,17 +227,23 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 | `flat-cache` | 6.1.23 | MIT | dev | 项目 | package.json |
 | `flatted` | 3.4.4 | ISC | dev | 项目 | package.json |
 | `fsevents` | 2.3.3 | MIT | dev | 项目 | 注册表事实快照 |
+| `get-stream` | 6.0.1 | MIT | prod | 项目 | package.json |
 | `glob-parent` | 6.0.2 | ISC | dev | 项目 | package.json |
 | `globals` | 17.13.0 | MIT | dev | 项目 | package.json |
 | `hashery` | 1.5.1 | MIT | dev | 项目 | package.json |
 | `hookified` | 1.15.1 | MIT | dev | 项目 | package.json |
 | `hookified` | 2.2.0 | MIT | dev | 项目 | package.json |
+| `human-signals` | 2.1.0 | Apache-2.0 | prod | 项目 | package.json |
 | `ignore` | 5.3.2 | MIT | dev | 项目 | package.json |
 | `ignore` | 7.0.12 | MIT | dev | 项目 | package.json |
 | `imurmurhash` | 0.1.4 | MIT | dev | 项目 | package.json |
+| `is-buffer` | 2.0.5 | MIT | prod | 项目 | package.json |
 | `is-extglob` | 2.1.1 | MIT | dev | 项目 | package.json |
 | `is-glob` | 4.0.3 | MIT | dev | 项目 | package.json |
-| `isexe` | 2.0.0 | ISC | dev | 项目 | package.json |
+| `is-node-process` | 1.2.0 | MIT | prod | 项目 | package.json |
+| `is-stream` | 2.0.1 | MIT | prod | 项目 | package.json |
+| `isexe` | 2.0.0 | ISC | prod | 项目 | package.json |
+| `jose` | 5.10.0 | MIT | prod | 项目 | package.json |
 | `json-schema-traverse` | 0.4.1 | MIT | dev | 项目 | package.json |
 | `json-stable-stringify-without-jsonify` | 1.0.1 | MIT | dev | 项目 | package.json |
 | `keyv` | 5.6.0 | MIT | dev | 项目 | package.json |
@@ -221,17 +262,30 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 | `lightningcss-win32-x64-msvc` | 1.33.0 | MPL-2.0 | dev | 项目 | 注册表事实快照 |
 | `locate-path` | 6.0.0 | MIT | dev | 项目 | package.json |
 | `magic-string` | 1.4.3 | MIT | dev | 项目 | package.json |
+| `merge-stream` | 2.0.0 | MIT | prod | 项目 | package.json |
+| `mimic-fn` | 2.1.0 | MIT | prod | 项目 | package.json |
 | `minimatch` | 10.2.6 | BlueOak-1.0.0 | dev | 项目 | package.json |
 | `ms` | 2.1.3 | MIT | dev | 项目 | package.json |
 | `nanoid` | 3.3.20 | MIT | prod | 项目 | package.json |
 | `natural-compare` | 1.4.0 | MIT | dev | 项目 | package.json |
 | `next` | 16.4.2 | MIT | prod | 项目 | package.json |
+| `npm-run-path` | 4.0.1 | MIT | prod | 项目 | package.json |
 | `obug` | 3.0.0 | MIT | dev | 项目 | package.json |
+| `onetime` | 5.1.2 | MIT | prod | 项目 | package.json |
 | `optionator` | 0.9.4 | MIT | dev | 项目 | package.json |
+| `os-paths` | 4.4.0 | MIT | prod | 项目 | package.json |
 | `p-limit` | 3.1.0 | MIT | dev | 项目 | package.json |
 | `p-locate` | 5.0.0 | MIT | dev | 项目 | package.json |
 | `path-exists` | 4.0.0 | MIT | dev | 项目 | package.json |
-| `path-key` | 3.1.1 | MIT | dev | 项目 | package.json |
+| `path-key` | 3.1.1 | MIT | prod | 项目 | package.json |
+| `pg` | 8.23.1 | MIT | prod | 项目 | package.json |
+| `pg-cloudflare` | 1.4.1 | MIT | prod | 项目 | package.json |
+| `pg-connection-string` | 2.14.1 | MIT | prod | 项目 | package.json |
+| `pg-int8` | 1.0.1 | ISC | prod | 项目 | package.json |
+| `pg-pool` | 3.14.0 | MIT | prod | 项目 | package.json |
+| `pg-protocol` | 1.16.1 | MIT | prod | 项目 | package.json |
+| `pg-types` | 2.2.0 | MIT | prod | 项目 | package.json |
+| `pgpass` | 1.0.5 | MIT | prod | 项目 | package.json |
 | `picocolors` | 1.1.1 | ISC | prod | 项目 | package.json |
 | `picomatch` | 4.0.7 | MIT | dev | 项目 | package.json |
 | `playwright` | 1.64.1 | Apache-2.0 | prod | 项目 | package.json |
@@ -239,20 +293,30 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 | `pnpm` | 12.11.2 | MIT | dev | pnpm 自锁 | 审计条目：pnpm-self-lockfile |
 | `postcss` | 8.5.23 | MIT | prod | 项目 | package.json |
 | `postcss` | 8.5.30 | MIT | dev | 项目 | package.json |
+| `postgres-array` | 2.0.0 | MIT | prod | 项目 | package.json |
+| `postgres-bytea` | 1.0.1 | MIT | prod | 项目 | package.json |
+| `postgres-date` | 1.0.7 | MIT | prod | 项目 | package.json |
+| `postgres-interval` | 1.2.0 | MIT | prod | 项目 | package.json |
 | `prelude-ls` | 1.2.1 | MIT | dev | 项目 | package.json |
 | `prettier` | 3.8.1 | MIT | dev | 项目 | package.json |
 | `punycode` | 2.3.1 | MIT | dev | 项目 | package.json |
 | `qified` | 0.10.1 | MIT | dev | 项目 | package.json |
 | `react` | 19.3.1 | MIT | prod | 项目 | package.json |
 | `react-dom` | 19.3.1 | MIT | prod | 项目 | package.json |
+| `retry` | 0.13.1 | MIT | prod | 项目 | package.json |
 | `rolldown` | 1.2.14 | MIT | dev | 项目 | package.json |
 | `scheduler` | 0.28.0 | MIT | prod | 项目 | package.json |
 | `semver` | 7.8.5 | ISC | dev | 项目 | package.json |
-| `shebang-command` | 2.0.0 | MIT | dev | 项目 | package.json |
-| `shebang-regex` | 3.0.0 | MIT | dev | 项目 | package.json |
+| `server-only` | 0.0.1 | MIT | prod | 项目 | package.json |
+| `shebang-command` | 2.0.0 | MIT | prod | 项目 | package.json |
+| `shebang-regex` | 3.0.0 | MIT | prod | 项目 | package.json |
+| `signal-exit` | 3.0.7 | ISC | prod | 项目 | package.json |
 | `source-map-js` | 1.2.2 | BSD-3-Clause | prod | 项目 | package.json |
+| `split2` | 4.2.0 | ISC | prod | 项目 | package.json |
 | `std-env` | 4.3.0 | MIT | dev | 项目 | package.json |
+| `strip-final-newline` | 2.0.0 | MIT | prod | 项目 | package.json |
 | `styled-jsx` | 5.1.6 | MIT | prod | 项目 | package.json |
+| `throttleit` | 2.1.0 | MIT | prod | 项目 | package.json |
 | `tinybench` | 6.2.2 | MIT | dev | 项目 | package.json |
 | `tinyexec` | 1.3.1 | MIT | dev | 项目 | package.json |
 | `tinyglobby` | 0.2.17 | MIT | dev | 项目 | package.json |
@@ -262,15 +326,20 @@ LittleQ 以 **AGPL-3.0-only** 发布（见 `LICENSE`、`NOTICE`）。本文件�
 | `typescript` | 6.0.3 | Apache-2.0 | dev | 项目 | package.json |
 | `typescript` | 7.0.2 | Apache-2.0 | dev | 项目 | package.json |
 | `typescript-eslint` | 8.71.2 | MIT | dev | 项目 | package.json |
+| `undici` | 6.29.1 | MIT | prod | 项目 | package.json |
 | `undici-types` | 8.9.0 | MIT | dev | 项目 | package.json |
 | `uri-js` | 4.4.1 | BSD-2-Clause | dev | 项目 | package.json |
 | `vite` | 8.3.4 | MIT | dev | 项目 | package.json |
 | `vitest` | 5.0.5 | MIT | dev | 项目 | package.json |
-| `which` | 2.0.2 | ISC | dev | 项目 | package.json |
+| `which` | 2.0.2 | ISC | prod | 项目 | package.json |
 | `why-is-node-running` | 3.2.1 | MIT | dev | 项目 | package.json |
 | `word-wrap` | 1.2.5 | MIT | dev | 项目 | package.json |
+| `xdg-app-paths` | 5.5.1 | MIT | prod | 项目 | package.json |
+| `xdg-portable` | 7.3.0 | MIT | prod | 项目 | package.json |
+| `xtend` | 4.0.2 | MIT | prod | 项目 | package.json |
 | `yaml` | 2.9.1 | ISC | dev | 项目 | package.json |
 | `yocto-queue` | 0.1.0 | MIT | dev | 项目 | package.json |
+| `zod` | 4.1.11 | MIT | prod | 项目 | package.json |
 | `zod` | 4.6.7 | MIT | prod | 项目 | package.json |
 | `zod-openapi` | 6.0.2 | MIT | prod | 项目 | package.json |
 
@@ -307,14 +376,14 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ### Apache-2.0
 
-适用于 42 个包：`@eslint/config-array@0.23.5`, `@eslint/config-helpers@0.7.0`, `@eslint/core@1.2.1`, `@eslint/object-schema@3.0.5`, `@eslint/plugin-kit@0.7.3`, `@humanfs/core@0.19.2`, `@humanfs/node@0.16.8`, `@humanfs/types@0.15.0`, `@humanwhocodes/module-importer@1.0.1`, `@humanwhocodes/retry@0.4.3`, `@playwright/test@1.64.1`, `@swc/helpers@0.5.23`, `@typescript/typescript-aix-ppc64@7.0.2`, `@typescript/typescript-darwin-arm64@7.0.2`, `@typescript/typescript-darwin-x64@7.0.2`, `@typescript/typescript-freebsd-arm64@7.0.2`, `@typescript/typescript-freebsd-x64@7.0.2`, `@typescript/typescript-linux-arm@7.0.2`, `@typescript/typescript-linux-arm64@7.0.2`, `@typescript/typescript-linux-loong64@7.0.2`, `@typescript/typescript-linux-mips64el@7.0.2`, `@typescript/typescript-linux-ppc64@7.0.2`, `@typescript/typescript-linux-riscv64@7.0.2`, `@typescript/typescript-linux-s390x@7.0.2`, `@typescript/typescript-linux-x64@7.0.2`, `@typescript/typescript-netbsd-arm64@7.0.2`, `@typescript/typescript-netbsd-x64@7.0.2`, `@typescript/typescript-openbsd-arm64@7.0.2`, `@typescript/typescript-openbsd-x64@7.0.2`, `@typescript/typescript-sunos-x64@7.0.2`, `@typescript/typescript-win32-arm64@7.0.2`, `@typescript/typescript-win32-x64@7.0.2`, `@typescript/typescript6@6.0.2`, `baseline-browser-mapping@2.11.29`, `detect-libc@2.1.2`, `eslint-visitor-keys@3.4.3`, `eslint-visitor-keys@5.0.1`, `expect-type@1.4.0`, `playwright@1.64.1`, `playwright-core@1.64.1`, `typescript@6.0.3`, `typescript@7.0.2`
+适用于 72 个包：`@aws-sdk/checksums@3.1001.3`, `@aws-sdk/client-s3@3.1152.0`, `@aws-sdk/core@3.978.3`, `@aws-sdk/credential-provider-env@3.972.74`, `@aws-sdk/credential-provider-http@3.972.76`, `@aws-sdk/credential-provider-ini@3.973.19`, `@aws-sdk/credential-provider-login@3.972.81`, `@aws-sdk/credential-provider-node@3.972.86`, `@aws-sdk/credential-provider-process@3.972.74`, `@aws-sdk/credential-provider-sso@3.973.18`, `@aws-sdk/credential-provider-web-identity@3.972.80`, `@aws-sdk/middleware-sdk-s3@3.972.79`, `@aws-sdk/nested-clients@3.997.48`, `@aws-sdk/s3-request-presigner@3.1152.0`, `@aws-sdk/signature-v4-multi-region@3.996.48`, `@aws-sdk/token-providers@3.1150.0`, `@aws-sdk/types@3.974.6`, `@aws-sdk/xml-builder@3.972.41`, `@aws/lambda-invoke-store@0.3.0`, `@eslint/config-array@0.23.5`, `@eslint/config-helpers@0.7.0`, `@eslint/core@1.2.1`, `@eslint/object-schema@3.0.5`, `@eslint/plugin-kit@0.7.3`, `@humanfs/core@0.19.2`, `@humanfs/node@0.16.8`, `@humanfs/types@0.15.0`, `@humanwhocodes/module-importer@1.0.1`, `@humanwhocodes/retry@0.4.3`, `@playwright/test@1.64.1`, `@smithy/core@3.36.0`, `@smithy/credential-provider-imds@4.5.2`, `@smithy/fetch-http-handler@5.8.0`, `@smithy/node-http-handler@4.12.1`, `@smithy/signature-v4@5.7.4`, `@smithy/types@4.19.0`, `@swc/helpers@0.5.23`, `@typescript/typescript-aix-ppc64@7.0.2`, `@typescript/typescript-darwin-arm64@7.0.2`, `@typescript/typescript-darwin-x64@7.0.2`, `@typescript/typescript-freebsd-arm64@7.0.2`, `@typescript/typescript-freebsd-x64@7.0.2`, `@typescript/typescript-linux-arm@7.0.2`, `@typescript/typescript-linux-arm64@7.0.2`, `@typescript/typescript-linux-loong64@7.0.2`, `@typescript/typescript-linux-mips64el@7.0.2`, `@typescript/typescript-linux-ppc64@7.0.2`, `@typescript/typescript-linux-riscv64@7.0.2`, `@typescript/typescript-linux-s390x@7.0.2`, `@typescript/typescript-linux-x64@7.0.2`, `@typescript/typescript-netbsd-arm64@7.0.2`, `@typescript/typescript-netbsd-x64@7.0.2`, `@typescript/typescript-openbsd-arm64@7.0.2`, `@typescript/typescript-openbsd-x64@7.0.2`, `@typescript/typescript-sunos-x64@7.0.2`, `@typescript/typescript-win32-arm64@7.0.2`, `@typescript/typescript-win32-x64@7.0.2`, `@typescript/typescript6@6.0.2`, `@vercel/blob@2.8.2`, `@vercel/cli-config@0.3.1`, `@vercel/cli-exec@1.0.1`, `@vercel/oidc@3.8.10`, `baseline-browser-mapping@2.11.29`, `detect-libc@2.1.2`, `eslint-visitor-keys@3.4.3`, `eslint-visitor-keys@5.0.1`, `expect-type@1.4.0`, `human-signals@2.1.0`, `playwright@1.64.1`, `playwright-core@1.64.1`, `typescript@6.0.3`, `typescript@7.0.2`
 
 SPDX: https://spdx.org/licenses/Apache-2.0.html
 
-全文来源：`@eslint/config-array@0.23.5`
+全文来源：`@aws-sdk/checksums@3.1001.3`
 
 ```text
-                                 Apache License
+                                Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
 
@@ -494,7 +563,7 @@ SPDX: https://spdx.org/licenses/Apache-2.0.html
    APPENDIX: How to apply the Apache License to your work.
 
       To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
+      boilerplate notice, with the fields enclosed by brackets "{}"
       replaced with your own identifying information. (Don't include
       the brackets!)  The text should be enclosed in the appropriate
       comment syntax for the file format. We also recommend that a
@@ -502,7 +571,7 @@ SPDX: https://spdx.org/licenses/Apache-2.0.html
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright [yyyy] [name of copyright owner]
+   Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -1059,7 +1128,7 @@ Creative Commons may be contacted at creativecommons.org.
 
 ### ISC
 
-适用于 7 个包：`flatted@3.4.4`, `glob-parent@6.0.2`, `isexe@2.0.0`, `picocolors@1.1.1`, `semver@7.8.5`, `which@2.0.2`, `yaml@2.9.1`
+适用于 10 个包：`flatted@3.4.4`, `glob-parent@6.0.2`, `isexe@2.0.0`, `pg-int8@1.0.1`, `picocolors@1.1.1`, `semver@7.8.5`, `signal-exit@3.0.7`, `split2@4.2.0`, `which@2.0.2`, `yaml@2.9.1`
 
 SPDX: https://spdx.org/licenses/ISC.html
 
@@ -1085,7 +1154,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ### MIT
 
-适用于 177 个包：`@cacheable/memory@2.2.0`, `@cacheable/utils@2.5.0`, `@esbuild/aix-ppc64@0.28.2`, `@esbuild/android-arm@0.28.2`, `@esbuild/android-arm64@0.28.2`, `@esbuild/android-x64@0.28.2`, `@esbuild/darwin-arm64@0.28.2`, `@esbuild/darwin-x64@0.28.2`, `@esbuild/freebsd-arm64@0.28.2`, `@esbuild/freebsd-x64@0.28.2`, `@esbuild/linux-arm@0.28.2`, `@esbuild/linux-arm64@0.28.2`, `@esbuild/linux-ia32@0.28.2`, `@esbuild/linux-loong64@0.28.2`, `@esbuild/linux-mips64el@0.28.2`, `@esbuild/linux-ppc64@0.28.2`, `@esbuild/linux-riscv64@0.28.2`, `@esbuild/linux-s390x@0.28.2`, `@esbuild/linux-x64@0.28.2`, `@esbuild/netbsd-arm64@0.28.2`, `@esbuild/netbsd-x64@0.28.2`, `@esbuild/openbsd-arm64@0.28.2`, `@esbuild/openbsd-x64@0.28.2`, `@esbuild/openharmony-arm64@0.28.2`, `@esbuild/sunos-x64@0.28.2`, `@esbuild/win32-arm64@0.28.2`, `@esbuild/win32-ia32@0.28.2`, `@esbuild/win32-x64@0.28.2`, `@eslint-community/eslint-utils@4.10.1`, `@eslint-community/regexpp@4.12.2`, `@eslint/js@9.39.2`, `@jridgewell/resolve-uri@3.1.2`, `@jridgewell/sourcemap-codec@1.6.0`, `@jridgewell/trace-mapping@0.3.31`, `@keyv/bigmap@1.3.1`, `@keyv/serialize@1.1.1`, `@next/env@16.4.2`, `@next/swc-darwin-arm64@16.4.2`, `@next/swc-darwin-x64@16.4.2`, `@next/swc-linux-arm64-gnu@16.4.2`, `@next/swc-linux-arm64-musl@16.4.2`, `@next/swc-linux-x64-gnu@16.4.2`, `@next/swc-linux-x64-musl@16.4.2`, `@next/swc-win32-arm64-msvc@16.4.2`, `@next/swc-win32-x64-msvc@16.4.2`, `@oxc-project/types@0.154.0`, `@pnpm/exe.android-arm64@12.11.2`, `@pnpm/exe.android-x64@12.11.2`, `@pnpm/exe.darwin-arm64@12.11.2`, `@pnpm/exe.darwin-x64@12.11.2`, `@pnpm/exe.freebsd-x64@12.11.2`, `@pnpm/exe.linux-arm64@12.11.2`, `@pnpm/exe.linux-arm64-musl@12.11.2`, `@pnpm/exe.linux-ppc64@12.11.2`, `@pnpm/exe.linux-riscv64@12.11.2`, `@pnpm/exe.linux-s390x@12.11.2`, `@pnpm/exe.linux-x64@12.11.2`, `@pnpm/exe.linux-x64-musl@12.11.2`, `@pnpm/exe.win32-arm64@12.11.2`, `@pnpm/exe.win32-x64@12.11.2`, `@rolldown/binding-android-arm-eabi@1.2.14`, `@rolldown/binding-android-arm64@1.2.14`, `@rolldown/binding-darwin-arm64@1.2.14`, `@rolldown/binding-darwin-x64@1.2.14`, `@rolldown/binding-freebsd-x64@1.2.14`, `@rolldown/binding-linux-arm-gnueabihf@1.2.14`, `@rolldown/binding-linux-arm64-gnu@1.2.14`, `@rolldown/binding-linux-arm64-musl@1.2.14`, `@rolldown/binding-linux-ppc64-gnu@1.2.14`, `@rolldown/binding-linux-s390x-gnu@1.2.14`, `@rolldown/binding-linux-x64-gnu@1.2.14`, `@rolldown/binding-linux-x64-musl@1.2.14`, `@rolldown/binding-openharmony-arm64@1.2.14`, `@rolldown/binding-win32-arm64-msvc@1.2.14`, `@rolldown/binding-win32-x64-msvc@1.2.14`, `@rolldown/pluginutils@1.0.1`, `@types/chai@5.2.3`, `@types/deep-eql@4.0.2`, `@types/esrecurse@4.3.1`, `@types/estree@1.0.9`, `@types/json-schema@7.0.15`, `@types/node@26.6.5`, `@types/react@19.3.0`, `@types/react-dom@19.3.0`, `@typescript-eslint/eslint-plugin@8.71.2`, `@typescript-eslint/parser@8.71.2`, `@typescript-eslint/project-service@8.71.2`, `@typescript-eslint/scope-manager@8.71.2`, `@typescript-eslint/tsconfig-utils@8.71.2`, `@typescript-eslint/type-utils@8.71.2`, `@typescript-eslint/types@8.71.2`, `@typescript-eslint/typescript-estree@8.71.2`, `@typescript-eslint/utils@8.71.2`, `@typescript-eslint/visitor-keys@8.71.2`, `@vitest/mocker@5.0.5`, `@vitest/spy@5.0.5`, `acorn@8.19.0`, `acorn-jsx@5.3.2`, `ajv@6.15.0`, `assertion-error@2.0.1`, `balanced-match@4.0.4`, `brace-expansion@5.0.12`, `cacheable@2.5.0`, `chai@6.3.0`, `client-only@0.0.1`, `cross-spawn@7.0.6`, `csstype@3.2.3`, `debug@4.4.3`, `deep-is@0.1.4`, `es-module-lexer@2.3.2`, `esbuild@0.28.2`, `escape-string-regexp@4.0.0`, `eslint@10.12.0`, `estree-walker@3.0.3`, `fast-deep-equal@3.1.3`, `fast-json-stable-stringify@2.1.0`, `fast-levenshtein@2.0.6`, `fdir@6.5.0`, `file-entry-cache@11.1.5`, `find-up@5.0.0`, `flat-cache@6.1.23`, `fsevents@2.3.3`, `globals@17.13.0`, `hashery@1.5.1`, `hookified@1.15.1`, `hookified@2.2.0`, `ignore@5.3.2`, `ignore@7.0.12`, `imurmurhash@0.1.4`, `is-extglob@2.1.1`, `is-glob@4.0.3`, `json-schema-traverse@0.4.1`, `json-stable-stringify-without-jsonify@1.0.1`, `keyv@5.6.0`, `levn@0.4.1`, `locate-path@6.0.0`, `magic-string@1.4.3`, `ms@2.1.3`, `nanoid@3.3.20`, `natural-compare@1.4.0`, `next@16.4.2`, `obug@3.0.0`, `optionator@0.9.4`, `p-limit@3.1.0`, `p-locate@5.0.0`, `path-exists@4.0.0`, `path-key@3.1.1`, `picomatch@4.0.7`, `pnpm@12.11.2`, `postcss@8.5.23`, `postcss@8.5.30`, `prelude-ls@1.2.1`, `prettier@3.8.1`, `punycode@2.3.1`, `qified@0.10.1`, `react@19.3.1`, `react-dom@19.3.1`, `rolldown@1.2.14`, `scheduler@0.28.0`, `shebang-command@2.0.0`, `shebang-regex@3.0.0`, `std-env@4.3.0`, `styled-jsx@5.1.6`, `tinybench@6.2.2`, `tinyexec@1.3.1`, `tinyglobby@0.2.17`, `ts-api-utils@2.5.0`, `type-check@0.4.0`, `typescript-eslint@8.71.2`, `undici-types@8.9.0`, `vite@8.3.4`, `vitest@5.0.5`, `why-is-node-running@3.2.1`, `word-wrap@1.2.5`, `yocto-queue@0.1.0`, `zod@4.6.7`, `zod-openapi@6.0.2`
+适用于 213 个包：`@cacheable/memory@2.2.0`, `@cacheable/utils@2.5.0`, `@esbuild/aix-ppc64@0.28.2`, `@esbuild/android-arm@0.28.2`, `@esbuild/android-arm64@0.28.2`, `@esbuild/android-x64@0.28.2`, `@esbuild/darwin-arm64@0.28.2`, `@esbuild/darwin-x64@0.28.2`, `@esbuild/freebsd-arm64@0.28.2`, `@esbuild/freebsd-x64@0.28.2`, `@esbuild/linux-arm@0.28.2`, `@esbuild/linux-arm64@0.28.2`, `@esbuild/linux-ia32@0.28.2`, `@esbuild/linux-loong64@0.28.2`, `@esbuild/linux-mips64el@0.28.2`, `@esbuild/linux-ppc64@0.28.2`, `@esbuild/linux-riscv64@0.28.2`, `@esbuild/linux-s390x@0.28.2`, `@esbuild/linux-x64@0.28.2`, `@esbuild/netbsd-arm64@0.28.2`, `@esbuild/netbsd-x64@0.28.2`, `@esbuild/openbsd-arm64@0.28.2`, `@esbuild/openbsd-x64@0.28.2`, `@esbuild/openharmony-arm64@0.28.2`, `@esbuild/sunos-x64@0.28.2`, `@esbuild/win32-arm64@0.28.2`, `@esbuild/win32-ia32@0.28.2`, `@esbuild/win32-x64@0.28.2`, `@eslint-community/eslint-utils@4.10.1`, `@eslint-community/regexpp@4.12.2`, `@eslint/js@9.39.2`, `@jridgewell/resolve-uri@3.1.2`, `@jridgewell/sourcemap-codec@1.6.0`, `@jridgewell/trace-mapping@0.3.31`, `@keyv/bigmap@1.3.1`, `@keyv/serialize@1.1.1`, `@neondatabase/serverless@1.2.0`, `@next/env@16.4.2`, `@next/swc-darwin-arm64@16.4.2`, `@next/swc-darwin-x64@16.4.2`, `@next/swc-linux-arm64-gnu@16.4.2`, `@next/swc-linux-arm64-musl@16.4.2`, `@next/swc-linux-x64-gnu@16.4.2`, `@next/swc-linux-x64-musl@16.4.2`, `@next/swc-win32-arm64-msvc@16.4.2`, `@next/swc-win32-x64-msvc@16.4.2`, `@oxc-project/types@0.154.0`, `@pnpm/exe.android-arm64@12.11.2`, `@pnpm/exe.android-x64@12.11.2`, `@pnpm/exe.darwin-arm64@12.11.2`, `@pnpm/exe.darwin-x64@12.11.2`, `@pnpm/exe.freebsd-x64@12.11.2`, `@pnpm/exe.linux-arm64@12.11.2`, `@pnpm/exe.linux-arm64-musl@12.11.2`, `@pnpm/exe.linux-ppc64@12.11.2`, `@pnpm/exe.linux-riscv64@12.11.2`, `@pnpm/exe.linux-s390x@12.11.2`, `@pnpm/exe.linux-x64@12.11.2`, `@pnpm/exe.linux-x64-musl@12.11.2`, `@pnpm/exe.win32-arm64@12.11.2`, `@pnpm/exe.win32-x64@12.11.2`, `@rolldown/binding-android-arm-eabi@1.2.14`, `@rolldown/binding-android-arm64@1.2.14`, `@rolldown/binding-darwin-arm64@1.2.14`, `@rolldown/binding-darwin-x64@1.2.14`, `@rolldown/binding-freebsd-x64@1.2.14`, `@rolldown/binding-linux-arm-gnueabihf@1.2.14`, `@rolldown/binding-linux-arm64-gnu@1.2.14`, `@rolldown/binding-linux-arm64-musl@1.2.14`, `@rolldown/binding-linux-ppc64-gnu@1.2.14`, `@rolldown/binding-linux-s390x-gnu@1.2.14`, `@rolldown/binding-linux-x64-gnu@1.2.14`, `@rolldown/binding-linux-x64-musl@1.2.14`, `@rolldown/binding-openharmony-arm64@1.2.14`, `@rolldown/binding-win32-arm64-msvc@1.2.14`, `@rolldown/binding-win32-x64-msvc@1.2.14`, `@rolldown/pluginutils@1.0.1`, `@types/chai@5.2.3`, `@types/deep-eql@4.0.2`, `@types/esrecurse@4.3.1`, `@types/estree@1.0.9`, `@types/json-schema@7.0.15`, `@types/node@26.6.5`, `@types/pg@8.23.1`, `@types/react@19.3.0`, `@types/react-dom@19.3.0`, `@typescript-eslint/eslint-plugin@8.71.2`, `@typescript-eslint/parser@8.71.2`, `@typescript-eslint/project-service@8.71.2`, `@typescript-eslint/scope-manager@8.71.2`, `@typescript-eslint/tsconfig-utils@8.71.2`, `@typescript-eslint/type-utils@8.71.2`, `@typescript-eslint/types@8.71.2`, `@typescript-eslint/typescript-estree@8.71.2`, `@typescript-eslint/utils@8.71.2`, `@typescript-eslint/visitor-keys@8.71.2`, `@vitest/mocker@5.0.5`, `@vitest/spy@5.0.5`, `acorn@8.19.0`, `acorn-jsx@5.3.2`, `ajv@6.15.0`, `assertion-error@2.0.1`, `async-retry@1.3.3`, `balanced-match@4.0.4`, `bowser@2.14.1`, `brace-expansion@5.0.12`, `cacheable@2.5.0`, `chai@6.3.0`, `client-only@0.0.1`, `cookie@2.0.1`, `cross-spawn@7.0.6`, `csstype@3.2.3`, `debug@4.4.3`, `deep-is@0.1.4`, `es-module-lexer@2.3.2`, `esbuild@0.28.2`, `escape-string-regexp@4.0.0`, `eslint@10.12.0`, `estree-walker@3.0.3`, `execa@5.1.1`, `fast-deep-equal@3.1.3`, `fast-json-stable-stringify@2.1.0`, `fast-levenshtein@2.0.6`, `fdir@6.5.0`, `file-entry-cache@11.1.5`, `find-up@5.0.0`, `flat-cache@6.1.23`, `fsevents@2.3.3`, `get-stream@6.0.1`, `globals@17.13.0`, `hashery@1.5.1`, `hookified@1.15.1`, `hookified@2.2.0`, `ignore@5.3.2`, `ignore@7.0.12`, `imurmurhash@0.1.4`, `is-buffer@2.0.5`, `is-extglob@2.1.1`, `is-glob@4.0.3`, `is-node-process@1.2.0`, `is-stream@2.0.1`, `jose@5.10.0`, `json-schema-traverse@0.4.1`, `json-stable-stringify-without-jsonify@1.0.1`, `keyv@5.6.0`, `levn@0.4.1`, `locate-path@6.0.0`, `magic-string@1.4.3`, `merge-stream@2.0.0`, `mimic-fn@2.1.0`, `ms@2.1.3`, `nanoid@3.3.20`, `natural-compare@1.4.0`, `next@16.4.2`, `npm-run-path@4.0.1`, `obug@3.0.0`, `onetime@5.1.2`, `optionator@0.9.4`, `os-paths@4.4.0`, `p-limit@3.1.0`, `p-locate@5.0.0`, `path-exists@4.0.0`, `path-key@3.1.1`, `pg@8.23.1`, `pg-cloudflare@1.4.1`, `pg-connection-string@2.14.1`, `pg-pool@3.14.0`, `pg-protocol@1.16.1`, `pg-types@2.2.0`, `pgpass@1.0.5`, `picomatch@4.0.7`, `pnpm@12.11.2`, `postcss@8.5.23`, `postcss@8.5.30`, `postgres-array@2.0.0`, `postgres-bytea@1.0.1`, `postgres-date@1.0.7`, `postgres-interval@1.2.0`, `prelude-ls@1.2.1`, `prettier@3.8.1`, `punycode@2.3.1`, `qified@0.10.1`, `react@19.3.1`, `react-dom@19.3.1`, `retry@0.13.1`, `rolldown@1.2.14`, `scheduler@0.28.0`, `server-only@0.0.1`, `shebang-command@2.0.0`, `shebang-regex@3.0.0`, `std-env@4.3.0`, `strip-final-newline@2.0.0`, `styled-jsx@5.1.6`, `throttleit@2.1.0`, `tinybench@6.2.2`, `tinyexec@1.3.1`, `tinyglobby@0.2.17`, `ts-api-utils@2.5.0`, `type-check@0.4.0`, `typescript-eslint@8.71.2`, `undici@6.29.1`, `undici-types@8.9.0`, `vite@8.3.4`, `vitest@5.0.5`, `why-is-node-running@3.2.1`, `word-wrap@1.2.5`, `xdg-app-paths@5.5.1`, `xdg-portable@7.3.0`, `xtend@4.0.2`, `yocto-queue@0.1.0`, `zod@4.1.11`, `zod@4.6.7`, `zod-openapi@6.0.2`
 
 SPDX: https://spdx.org/licenses/MIT.html
 

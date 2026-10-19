@@ -1,0 +1,14 @@
+{
+  "name": "@littleq/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@littleq/domain": "workspace:*",
+    "@littleq/infra": "workspace:*",
+    "@littleq/work-contract": "workspace:*",
+    "@neondatabase/serverless": "^0.10.0",
+    "cookie": "2.0.1",
+    "server-only": "0.0.1"
+  }
+}
