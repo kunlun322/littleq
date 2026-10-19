@@ -73,6 +73,62 @@ function pnpmScriptsOf(doc) {
 const ciScripts = new Set();
 for (const [, doc] of docs) for (const script of pnpmScriptsOf(doc.yaml)) ciScripts.add(script);
 
+const verifyChain = scripts.verify
+  .split('&&')
+  .map((part) => part.trim().replace(/^pnpm\s+/, ''))
+  .filter(Boolean);
+
+// ── 「verify 已串链、CI 尚未接线」台账 ────────────────────────────────────────
+//
+// 为什么会有这张表：ZLQ-195（D0）按工单 §6 的硬要求把新增的就绪门禁串进了 `pnpm verify`
+// （原文「`verify` 链必须把新门禁串进去，不能只加脚本不串链」），但 `.github/workflows/**`
+// 是 D6 的独占面（工单 §2 的绝对禁区），本单无权给它补 step。于是下面第 1 条覆盖锁会立刻
+// 判红 —— 而它判红的后果不是「CI 少一道门」，是 **D0 落地后 D1–D5 每一单的 `pnpm test`
+// 都是红的**，串行链在中途断掉。
+//
+// 这**不是**放宽容差。三条约束缺一不可，任何一条被破坏这张表就失去正当性：
+//   ① 基线 17 道被单独钉进 BASELINE_VERIFY_CHAIN，永不可进台账。它们掉出 CI 仍然立刻红，
+//      和加这张表之前一模一样 —— 豁免只可能发生在「本单新增的门禁」上。
+//   ② 台账自我退役：条目一旦被某个工作流接上（D6 补了 step），本文件立刻判红，逼着补
+//      step 的人在同一笔改动里把条目删掉。所以它不可能沉淀成一张长期豁免表。
+//   ③ 每条必须点名 owner 与理由；写不出归属的缺口不许进台账。
+//
+// 替代方案（把就绪门禁只留在 `pnpm test` 里、不进 verify 链）被否掉了：那正是 §6 明文
+// 禁止的「只加脚本不串链」，而且会让 D2–D6 在 `pnpm verify` 的输出里看不见这道门。
+const PENDING_CI_WIRING = [
+  {
+    script: 'unit-readiness',
+    owner: 'D6（`.github/workflows/**` 的独占单；ZLQ-195 交付时尚未建单）',
+    reason:
+      'ci.yml 需要补一个 `- name: 单元就绪门禁（UnitReadiness 双重 tripwire）` / `run: pnpm unit-readiness` 的 step，' +
+      '位置必须在 `pnpm dep-graph:control` 之后、`pnpm build` 之前，与 verify 链同序。',
+  },
+];
+
+// 基线 17 道门禁（ZLQ-192 验收口径）。这份名单是「永不可豁免」的白名单反面：
+// 台账里出现其中任何一个，本文件判红。
+const BASELINE_VERIFY_CHAIN = [
+  'typecheck',
+  'lint',
+  'format:check',
+  'dep-graph',
+  'dep-graph:control',
+  'build',
+  'contract:check',
+  'contract:compat',
+  'contract:control',
+  'license:scan',
+  'bundles',
+  'license:bundle',
+  'license:third-party:check',
+  'sbom:generate',
+  'license:image',
+  'license:control',
+  'test',
+];
+
+const pendingScripts = new Set(PENDING_CI_WIRING.map((entry) => entry.script));
+
 describe('工作流引用的脚本都真实存在', () => {
   it.each([...ciScripts].sort())('package.json 里有 %s', (script) => {
     expect(scripts[script], `CI 引用了不存在的脚本 pnpm ${script}`).toBeTypeOf('string');
@@ -84,11 +140,6 @@ describe('工作流引用的脚本都真实存在', () => {
 });
 
 describe('pnpm verify 的每一项门禁都在 CI 里', () => {
-  const verifyChain = scripts.verify
-    .split('&&')
-    .map((part) => part.trim().replace(/^pnpm\s+/, ''))
-    .filter(Boolean);
-
   it('verify 本身就是一串 pnpm 脚本', () => {
     expect(verifyChain.length).toBeGreaterThanOrEqual(13);
     for (const item of verifyChain)
@@ -96,15 +147,52 @@ describe('pnpm verify 的每一项门禁都在 CI 里', () => {
   });
 
   // 这条是防漂移的主锁：往 verify 里加门禁却忘了加进 CI，测试立刻红。
-  it.each(verifyChain)('%s 出现在某个工作流的 step 里', (script) => {
+  // 唯一的例外是 PENDING_CI_WIRING 台账里点名了归属的条目（见该常量上方的三条约束）。
+  it.each(verifyChain)('%s 出现在某个工作流的 step 里，或在待接线台账里点名归属', (script) => {
     expect(
-      ciScripts.has(script),
-      `${script} 在 verify 里但不在任何工作流里——门禁会从 CI 静默消失`,
+      ciScripts.has(script) || pendingScripts.has(script),
+      `${script} 在 verify 里但不在任何工作流里——门禁会从 CI 静默消失。` +
+        `若它是新增门禁且 CI 侧归别的单，把它连同 owner 一起写进 PENDING_CI_WIRING，不要直接放宽这条断言。`,
     ).toBe(true);
   });
 
   it('CI 还额外跑了 verify 没有的 e2e smoke', () => {
     expect(ciScripts.has('test:e2e:smoke')).toBe(true);
+  });
+});
+
+describe('待接线台账不许变成一张长期豁免表', () => {
+  it('台账条目必须真的在 verify 链里（不许留孤儿条目当免死金牌）', () => {
+    for (const { script } of PENDING_CI_WIRING)
+      expect(verifyChain, `${script} 在台账里却不在 verify 链里`).toContain(script);
+  });
+
+  it('台账条目必须点名 owner 与理由', () => {
+    for (const entry of PENDING_CI_WIRING) {
+      expect(entry.owner?.trim().length, `${entry.script} 没写 owner`).toBeGreaterThan(0);
+      expect(entry.reason?.trim().length, `${entry.script} 没写理由`).toBeGreaterThan(0);
+    }
+  });
+
+  // 自我退役：D6 把 step 补进 ci.yml 之后，这条立刻红，逼它在同一笔改动里删掉台账条目。
+  // 少了这一条，台账只会单向增长，最终等价于把覆盖锁整个关掉。
+  it.each(PENDING_CI_WIRING.map((entry) => [entry.script, entry.owner]))(
+    '%s 已经被 CI 接上了 ⇒ 必须把它从台账里删掉',
+    (script) => {
+      expect(
+        ciScripts.has(script),
+        `${script} 已经出现在某个工作流里了，台账条目已经过期 —— 删掉它，` +
+          `否则这张表会一直替未来的门禁提供豁免先例`,
+      ).toBe(false);
+    },
+  );
+
+  it('基线 17 道门禁永不可进台账，也一道都不许从 verify 里掉出去', () => {
+    for (const script of BASELINE_VERIFY_CHAIN) {
+      expect(pendingScripts.has(script), `${script} 是基线门禁，不许豁免`).toBe(false);
+      expect(verifyChain, `${script} 从 verify 链里消失了`).toContain(script);
+      expect(ciScripts.has(script), `${script} 是基线门禁且必须仍在 CI 里`).toBe(true);
+    }
   });
 });
 
@@ -608,10 +696,8 @@ describe('CI 实际执行的步骤顺序与 pnpm verify 的链路顺序等价', 
   // 因此这里锁的是「顺序等价」而不是「某几个步骤的先后」：把每个作业里**实际会执行的**
   // pnpm 脚本按出现顺序抽出来，只保留同时出现在 verify 链路里的那些，它们在 verify 链路中
   // 的下标必须严格递增。这样任何一侧单独调序都会立刻变红，两侧无法再各自漂移。
-  const verifyChain = scripts.verify
-    .split('&&')
-    .map((part) => part.trim().replace(/^pnpm\s+/, ''))
-    .filter(Boolean);
+  // verifyChain 用文件顶部那一份（同一套解析规则），不在这里再抄一遍：抄两份的结果是
+  // 两边可以各自漂移，而这条测试存在的理由恰恰是「不许各说各话」。
 
   // 与 pnpmScriptsOf 同一套识别规则，但**保留顺序与重复**：Set 会把顺序抹掉，
   // 而顺序正是这条测试要断言的对象。
@@ -671,6 +757,10 @@ describe('CI 实际执行的步骤顺序与 pnpm verify 的链路顺序等价', 
   // 单作业阈值放宽到 ≥1 之后，必须有一条整体断言兜住「所有作业加起来其实没测到什么」：
   // 全部作业覆盖到的 verify 门禁去重后要接近整条链路，否则上面的递增断言可以靠
   // 「每个作业只跑一项」而恒真。
+  //
+  // 减掉的 pendingScripts.size 是**点名了归属**的待接线条目，不是一个可调的容差旋钮：
+  // 台账里每一条都被上面那组断言单独锁住（必须在 verify 里、必须有 owner、CI 一接上就判红、
+  // 基线 17 道永不可进）。台账为空时这条断言与它原来的写法逐字等价。
   it('全部作业合起来覆盖了 verify 链路的绝大多数门禁', () => {
     const covered = new Set(
       jobs
@@ -678,7 +768,7 @@ describe('CI 实际执行的步骤顺序与 pnpm verify 的链路顺序等价', 
         .map((script) => verifyChain.indexOf(script))
         .filter((index) => index >= 0),
     );
-    expect(covered.size).toBeGreaterThanOrEqual(verifyChain.length - 1);
+    expect(covered.size).toBeGreaterThanOrEqual(verifyChain.length - pendingScripts.size - 1);
   });
 
   // 反向锁：CI 里出现的门禁不许比 verify 少一个。少一个就意味着「本地全绿但那道门禁在 CI
@@ -686,6 +776,7 @@ describe('CI 实际执行的步骤顺序与 pnpm verify 的链路顺序等价', 
   it('verify 链路里的每一项门禁都在某个工作流作业里被执行', () => {
     const executed = new Set(jobs.flatMap((job) => job.sequence));
     for (const script of verifyChain) {
+      if (pendingScripts.has(script)) continue;
       expect(executed.has(script), `${script} 在 verify 里但没有任何作业执行它`).toBe(true);
     }
   });

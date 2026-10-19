@@ -22,6 +22,7 @@
     "format:check": "prettier --check .",
     "dep-graph": "node tools/check-dependency-graph.mjs",
     "dep-graph:control": "node tools/check-dependency-graph.mjs --root tools/__fixtures__/dep-graph-violation --expect-failures 14",
+    "unit-readiness": "node tools/check-unit-readiness.mjs",
     "license:scan": "node tools/license/scan.mjs",
     "license:scan:strict": "node tools/license/scan.mjs --strict",
     "license:registry-facts": "node tools/license/registry-facts.mjs",
@@ -39,7 +40,7 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:e2e:smoke": "playwright test",
-    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm dep-graph && pnpm dep-graph:control && pnpm build && pnpm contract:check && pnpm contract:compat && pnpm contract:control && pnpm license:scan && pnpm bundles && pnpm license:bundle && pnpm license:third-party:check && pnpm sbom:generate && pnpm license:image && pnpm license:control && pnpm test"
+    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm dep-graph && pnpm dep-graph:control && pnpm unit-readiness && pnpm build && pnpm contract:check && pnpm contract:compat && pnpm contract:control && pnpm license:scan && pnpm bundles && pnpm license:bundle && pnpm license:third-party:check && pnpm sbom:generate && pnpm license:image && pnpm license:control && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
