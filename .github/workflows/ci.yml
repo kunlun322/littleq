@@ -85,8 +85,10 @@ jobs:
       - name: 依赖图门禁对照用例（故意植入的 8 处违规必须全部命中）
         run: pnpm dep-graph:control
 
-      # typecheck 已经跑过 `tsc -b`，这一步是增量空操作。保留它有两个理由：产物要落在
-      # 工作树里供后续步骤与本地复现使用，而且 `build` 是 verify 链路上的一道独立门禁，
+      # typecheck 已经跑过 `tsc -b`，所以这一步的类型部分是增量空操作；但 `build` 不只是
+      # `tsc -b` —— 它还会执行 `web:build`，把 apps/web 真正导出成静态站点并检查产物
+      # （ZLQ-190 §6.1：build 不得仅凭旧的 dist/index.js 通过）。保留它有两个理由：产物要
+      # 落在工作树里供后续步骤与本地复现使用，而且 `build` 是 verify 链路上的一道独立门禁，
       # 从 CI 里删掉它等于让「构建能过」这件事不再被强制。
       - name: 构建
         run: pnpm build
@@ -199,6 +201,13 @@ jobs:
 
       - name: 安装 Playwright 浏览器
         run: pnpm exec playwright install --with-deps chromium
+
+      # 先构建静态站点：e2e 现在加载的是 apps/web/out 这份**真实部署产物**（ZLQ-190 §6.2），
+      # 不再只是 esbuild 的合规 bundle。`pnpm build` 内部已经会跑一次 `pnpm bundles`，
+      # 下面那步是刻意保留的重复：它让「e2e 加载的产物在本作业内被构建过」这条契约
+      # 独立于 `web:build` 的内部编排，将来谁改了 web:build 也不会让 e2e 悄悄加载旧产物。
+      - name: 构建静态站点（e2e 加载的就是这份产物）
+        run: pnpm build
 
       - name: 打包（e2e 加载的就是这份产物）
         run: pnpm bundles

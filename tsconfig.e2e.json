@@ -1,0 +1,26 @@
+{
+  // e2e 专用类型检查工程（ZLQ-190 §6.1）。
+  //
+  // 为什么单独一份而不是把 dom 加进 tsconfig.test.json：
+  // `e2e/smoke.spec.ts` 里 `page.evaluate()` 的回调是**在浏览器里执行**的代码，
+  // 它合法地使用 document / getComputedStyle / HTMLAnchorElement。而 `packages/*/test`
+  // 与 `apps/*/test` 跑在 node 环境，一旦整个测试工程都带上 dom lib，
+  // 「服务端代码里误用了浏览器 API」这类错误就再也查不出来了 —— 那是一次静默的门禁削弱。
+  // 所以 dom 只授予 e2e 这一个工程。
+  //
+  // 与 tsconfig.test.json 一样是 noEmit / 非 composite：它只负责类型判定，不产出文件，
+  // 也不参与根 solution 的 `tsc -b` 增量图。
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "noEmit": true,
+    "allowJs": true,
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": ["node"]
+  },
+  "include": ["e2e/**/*.ts"]
+}

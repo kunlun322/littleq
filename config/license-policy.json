@@ -85,7 +85,7 @@
     ]
   },
   "adjudications": {
-    "note": "命中 reviewRequired 的依赖必须在此登记，否则门禁以退出码 2 失败。status=pending-architect 表示已记录、已输出待评审清单、但尚未裁定：扫描器会大声报告（stdout + artifacts/license-report.json + CI step summary）却不判死，这正是 issue 要求的「既不静默通过，也不一律判死」。架构师裁定后把 status 改为 approved 或 rejected；approved 视同 allowed，rejected 视同 forbidden。--strict 模式下 pending-architect 也返回退出码 2，供裁定完成后回归检查。批准是**有条件的**：distributed:false 表示「之所以放行，是因为它不随作品或镜像分发」，这个前提由代码强制而不是靠人记住 —— tools/lib/collect.mjs 的 approvalOutOfScope() 一旦发现该包成了生产依赖（scan.mjs）或被打包进产物（bundle-scan.mjs），批准即失效，包退回 reviewRequired 并以退出码 2 要求重新裁定。换句话说，把某个 devDependency 挪进 dependencies 不能悄悄让一份 copyleft 批准跟着搬家。",
+    "note": "命中 reviewRequired 的依赖必须在此登记，否则门禁以退出码 2 失败。status=pending-architect 表示已记录、已输出待评审清单、但尚未裁定：扫描器会大声报告（stdout + artifacts/license-report.json + CI step summary）却不判死，这正是 issue 要求的「既不静默通过，也不一律判死」。架构师裁定后把 status 改为 approved 或 rejected；approved 视同 allowed，rejected 视同 forbidden。--strict 模式下 pending-architect 也返回退出码 2，供裁定完成后回归检查。批准是**有条件的**：distributed:false 表示「之所以放行，是因为它不随作品或镜像分发」，这个前提由代码强制而不是靠人记住 —— tools/lib/collect.mjs 的 approvalOutOfScope() 一旦发现该包成了生产依赖（scan.mjs）或被打包进产物（bundle-scan.mjs），批准即失效，包退回 reviewRequired 并以退出码 2 要求重新裁定。换句话说，把某个 devDependency 挪进 dependencies 不能悄悄让一份 copyleft 批准跟着搬家。distributed:true 则表示这条批准的前提**不是**「不分发」（例如 CC-BY-4.0 这类署名许可：义务是公开归属，与是否分发无关），此时 approvalOutOfScope() 恒不触发，放行的依据必须由 ruling 自己写明并由门禁另行强制。",
     "statusValues": ["pending-architect", "approved", "rejected"],
     "entries": [
       {
@@ -135,6 +135,29 @@
         "adjudicatedIn": "ZLQ-162",
         "adjudicatedBy": "产品经理（代表项目所有者裁定）",
         "ruling": "允许（覆盖 lightningcss@1.33.0 及其 12 个平台二进制变体）。理由同上：全部是 devDependencies、不随作品或镜像分发，MPL-2.0 的文件级 copyleft 也就无从触发。该理由即 distributed:false 这一前提，由门禁代码强制 —— 若 lightningcss 日后被打包进 web bundle 或成为生产依赖，本条批准自动失效并要求重新裁定。许可档位仍留在 reviewRequired（MPL-2.0 不进六项白名单），放行只针对这一条已登记的 (namePrefix, version)。"
+      },
+      {
+        "id": "caniuse-lite-cc-by-4.0-1.0.30001816",
+        "status": "approved",
+        "license": "CC-BY-4.0",
+        "match": { "names": ["caniuse-lite"], "versions": ["1.0.30001816"] },
+        "distributed": true,
+        "usage": "浏览器兼容数据。它是 next@16.4.2 的硬 dependencies 条目（与 baseline-browser-mapping、postcss@8.5.23 并列，锁文件里没有 browserslist），只在构建期被读取以决定 CSS/JS 转换目标，数据本身不会被打进 apps/web/out 静态产物；但因为它由生产依赖边引入，分类上就是生产依赖，所以按保守口径当作可分发处理。",
+        "introducedBy": [
+          "apps/web dependency next@16.4.2",
+          "next@16.4.2 dependencies → caniuse-lite@1.0.30001816"
+        ],
+        "links": [
+          "https://creativecommons.org/licenses/by/4.0/legalcode",
+          "https://www.npmjs.com/package/caniuse-lite/v/1.0.30001816",
+          "https://github.com/browserslist/caniuse-lite"
+        ],
+        "reason": "CC-BY-4.0 在 reviewRequired.exact 中，不在 §10.3 的六项白名单内，且它是**署名**许可而非 copyleft：义务是保留名称、版本、许可证与归属声明，不是开放源码。这类许可的放行判断取决于「归属声明有没有真的随产物公开」，属于必须逐案登记的事实判断，不能由扫描器自行放行。",
+        "requestedReviewer": "架构师",
+        "raisedIn": "ZLQ-190",
+        "adjudicatedIn": "ZLQ-190",
+        "adjudicatedBy": "架构师（ZLQ-190 设计文档 §6.3），产品经理验收 ZLQ-190 时代表项目所有者确认",
+        "ruling": "允许，且**只允许 caniuse-lite@1.0.30001816 这一个精确版本**（ZLQ-190 §6.3）。条件三条：其一，按保守口径视为可分发，因此本条声明 distributed:true —— 与既有两条 dev-only 批准不同，它不依赖「不分发所以无所谓」这个前提，approvalOutOfScope() 对它恒不触发，这是刻意的：一份署名许可的放行理由应当是「归属已公开」，而不是「反正没分发」。其二，名称、版本、许可证与归属必须出现在 THIRD_PARTY_LICENSES 以及随站点部署的法律页里；这一条由 pnpm license:third-party 的全量清单段与「许可证全文」段自动生成（全文从已安装包内的 LICENSE 收割，不转抄），部署侧由 tools/prepare-web-legal.mjs 逐字节复制到 apps/web/public/legal/THIRD_PARTY_LICENSES.txt，并由 tools/check-web-export.mjs 与 e2e 断言其确实存在于产物中。其三，框架升级带来新版本时必须重新裁定：match.versions 是精确版本，升级后旧条目失配，包会退回 review-required 并以退出码 2 要求人工裁定，不会静默沿用。许可档位不动 —— CC-BY-4.0 仍留在 reviewRequired，不进六项白名单，放行只针对这一条已登记的 (name, version)。"
       }
     ]
   },

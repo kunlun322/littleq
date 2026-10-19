@@ -4,23 +4,31 @@
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
-  "description": "LittleQ 主站 Web 骨架（ZLQ-153 §1.3）：SSR 页面与作品展示入口，不持有 AI 凭证。",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "description": "LittleQ 主站 Web（ZLQ-153 §1.3 / ZLQ-190）：Next.js 16 App Router 静态导出站点，不持有 AI 凭证。",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b && next build"
   },
   "dependencies": {
     "@littleq/design-system": "workspace:*",
-    "@littleq/work-contract": "workspace:*"
+    "@littleq/work-contract": "workspace:*",
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
   }
 }

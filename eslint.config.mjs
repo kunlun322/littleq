@@ -130,7 +130,10 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
+      // Next.js 的构建中间目录与 output:'export' 的静态站点（ZLQ-190 §6.1）。
+      // 两者都是压缩过的生成物：lint 它们只会产生无法修、也不该修的噪声。
       '**/.next/**',
+      '**/out/**',
       '**/coverage/**',
       '**/test-results/**',
       '**/playwright-report/**',
@@ -160,8 +163,10 @@ export default tseslint.config(
     },
   },
   {
+    // apps/web 现在有 .tsx（Next.js App Router 的页面与组件），它们跑在浏览器里，
+    // 需要 document / getComputedStyle 这类全局；只列 *.ts 会让 tsx 文件按纯 Node 环境判定。
     name: 'littleq/browser-globals',
-    files: ['packages/design-system/**/*.ts', 'apps/web/**/*.ts'],
+    files: ['packages/design-system/**/*.{ts,tsx}', 'apps/web/**/*.{ts,tsx}', 'e2e/**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser } },
   },
   ...boundaryConfigs,

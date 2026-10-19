@@ -163,9 +163,18 @@ describe('策略文件的不变量', () => {
       expect(entry.license).toBeTruthy();
       expect(entry.links.length).toBeGreaterThan(0);
       expect(entry.links.every((link) => link.startsWith('https://'))).toBe(true);
-      expect(entry.raisedIn).toBe('ZLQ-159');
+      // 曾是 `toBe('ZLQ-159')`：那等于把「所有裁定都在 ZLQ-159 提出」写进了契约，
+      // 而 ZLQ-190 的 caniuse-lite 是第二条提出任务。改成校验形状（真任务号）+ 下面那条
+      // 显式钉住历史条目，两侧都还能被染色：编造 raisedIn 会挂在这里，改写历史会挂在下面。
+      expect(entry.raisedIn, `${entry.id} 的 raisedIn 必须是任务号`).toMatch(/^ZLQ-\d+$/);
       expect(entry.requestedReviewer).toBe('架构师');
       expect(entry.match).toBeTruthy();
+    }
+    // 既有两条批准由 ZLQ-159 提出、ZLQ-162 裁定，这是治理记录的一部分，不许被顺手改写。
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    for (const id of ['minimatch-blueoak-1.0.0', 'lightningcss-mpl-2.0']) {
+      expect(byId.get(id)?.raisedIn, `${id} 的提出任务被改写了`).toBe('ZLQ-159');
+      expect(byId.get(id)?.adjudicatedIn, `${id} 的裁定任务被改写了`).toBe('ZLQ-162');
     }
   });
 
@@ -181,27 +190,41 @@ describe('策略文件的不变量', () => {
       expect(entry.adjudicatedIn, `${entry.id} 缺裁定任务号`).toBeTruthy();
       expect(entry.adjudicatedBy, `${entry.id} 缺裁定人`).toBeTruthy();
       expect(entry.ruling, `${entry.id} 缺裁定理由`).toBeTruthy();
-      expect(entry.ruling, `${entry.id} 的理由没写明前提由代码强制`).toContain('distributed:false');
+      // 曾是 `.toContain('distributed:false')`：它真正想锁的是「理由必须写明代码强制的那个前提」。
+      // caniuse-lite 是第一条 distributed:true 的批准（署名许可的放行理由是「归属已公开」，
+      // 不是「反正没分发」），所以这里改成校验理由与它自己声明的前提**一致**：
+      // 翻转 distributed 而不同步改 ruling 会红，两边都写着不成立的前提也会红。
+      expect(entry.ruling, `${entry.id} 的理由没写明它自己声明的前提`).toContain(
+        `distributed:${entry.distributed}`,
+      );
       expect(typeof entry.distributed, `${entry.id} 未声明 distributed 前提`).toBe('boolean');
     }
-    // 当前两条批准（ZLQ-162 治理裁定 3）都以「不随作品或镜像分发」为前提。
     // 钉住清单是为了让「新增一条批准」成为一次有意识的改动，而不是悄悄多出一行。
     expect(approved.map((entry) => entry.id).sort()).toEqual([
+      'caniuse-lite-cc-by-4.0-1.0.30001816',
       'lightningcss-mpl-2.0',
       'minimatch-blueoak-1.0.0',
     ]);
-    for (const entry of approved)
-      expect(entry.distributed, `${entry.id} 的前提应当是不分发`).toBe(false);
+    // 「不分发」不再是所有批准的共同前提，所以把每条的前提钉成一张显式表：
+    // 新增、删除或翻转任何一条都必须同时改这里。表由 approved 派生，不是抄某次运行的计数。
+    const premises = Object.fromEntries(approved.map((entry) => [entry.id, entry.distributed]));
+    expect(premises).toEqual({
+      'caniuse-lite-cc-by-4.0-1.0.30001816': true,
+      'lightningcss-mpl-2.0': false,
+      'minimatch-blueoak-1.0.0': false,
+    });
   });
 
-  it('批准没有顺手放宽许可档位：MPL-2.0 与 BlueOak-1.0.0 仍在 reviewRequired', () => {
+  it('批准没有顺手放宽许可档位：MPL-2.0、BlueOak-1.0.0、CC-BY-4.0 仍在 reviewRequired', () => {
     // 治理裁定 3 的口径是「这 13 项允许，但许可档位不动」—— 放行只针对已登记的
     // (name|namePrefix, version)。把档位加进白名单会让下一个未登记的 MPL 依赖自动通过，
-    // 那才是真的放宽闸门。
+    // 那才是真的放宽闸门。ZLQ-190 的 caniuse-lite 批准沿用同一口径，所以 CC-BY-4.0 一并钉住。
     expect(policy.allowed).not.toContain('MPL-2.0');
     expect(policy.allowed).not.toContain('BlueOak-1.0.0');
+    expect(policy.allowed).not.toContain('CC-BY-4.0');
     expect(policy.reviewRequired.exact).toContain('MPL-2.0');
     expect(policy.reviewRequired.exact).toContain('BlueOak-1.0.0');
+    expect(policy.reviewRequired.exact).toContain('CC-BY-4.0');
     // 未登记的包拿不到任何裁定条目，因此仍会停在 review-required → scan.mjs 退出码 2。
     expect(findAdjudication({ name: 'some-unregistered-mpl-lib', version: '9.9.9' }, policy)).toBe(
       null,
@@ -276,16 +299,81 @@ describe('真实 lockfile 闭包的审计结论', () => {
     expect(result.entries.some((item) => item.name === 'pnpm')).toBe(true);
   });
 
-  it('生产依赖只有 zod 与 zod-openapi —— 其余全部是构建期依赖', () => {
-    // 这两个包就是 API 契约层的全部运行时分发面：zod 描述 DTO，zod-openapi 单向派生
-    // OpenAPI 文档。断言的是**集合**而不是数量 —— 数量会随契约层演进变化，而「运行
-    // 时分发面只允许这两个」是许可治理裁定（附录 A §3.5 / PM §4.7 精确锁定 6.0.2）。
-    // 排序后比较：collect() 的遍历顺序不是契约的一部分。
+  it('生产依赖集合是被显式钉住的：契约层仍是 zod + zod-openapi，其余全部由 next 的构建闭包引入', () => {
+    // ZLQ-190 之前这里钉的是 `['zod-openapi@6.0.2', 'zod@4.6.7']`：当时 apps/web 还是库形态，
+    // 运行时分发面确实只有契约层这两个包。ZLQ-190 把它变成真实的 Next 静态站点后，
+    // 生产闭包必然扩大 —— 设计文档 §6.3 明确要求「生成清单必须如实反映分类变化」，
+    // 所以这张表跟着变，但**形式不变**：仍然是钉住集合，不是钉住数量。
+    // 任何新增或消失的生产依赖都必须同时改这张表，不会悄悄多出一行。
+    //
+    // 刻意连版本一起钉：生产闭包里的版本变化是治理事件而不是日常维护 ——
+    // caniuse-lite 就是例子（它的批准是精确版本的，换版本即失配并要求重新裁定）。
+    // 因此框架升级会让这条测试变红，这是设计意图（§6.3「框架升级带来新版本时重新裁定」），
+    // 不是需要放宽的噪声。
     const prod = result.entries
       .filter((item) => item.kind === 'prod')
       .map((item) => `${item.name}@${item.version}`)
       .sort();
-    expect(prod).toEqual(['zod-openapi@6.0.2', 'zod@4.6.7']);
+    expect(
+      prod,
+      '生产依赖（运行时分发面）发生了变化。这不是可以直接改表了事的改动：' +
+        '新增项要确认许可证档位（命中 reviewRequired 的必须在 config/license-policy.json 登记裁定），' +
+        '版本变化要确认精确版本的裁定是否仍然匹配（见 caniuse-lite 条目）。',
+    ).toEqual(
+      [
+        // next 自身与它的构建闭包
+        'next@16.4.2',
+        '@next/env@16.4.2',
+        '@swc/helpers@0.5.23',
+        'styled-jsx@5.1.6',
+        'client-only@0.0.1',
+        'tslib@2.8.1',
+        'postcss@8.5.23',
+        'nanoid@3.3.20',
+        'picocolors@1.1.1',
+        'source-map-js@1.2.2',
+        // 浏览器兼容数据（唯一一条 CC-BY-4.0，见 caniuse-lite-cc-by-4.0-1.0.30001816 裁定）
+        'caniuse-lite@1.0.30001816',
+        'baseline-browser-mapping@2.11.29',
+        // react 运行时
+        'react@19.3.1',
+        'react-dom@19.3.1',
+        'scheduler@0.28.0',
+        // next 的平台二进制（8 个变体全部在闭包内，与 runner 平台无关）
+        '@next/swc-darwin-arm64@16.4.2',
+        '@next/swc-darwin-x64@16.4.2',
+        '@next/swc-linux-arm64-gnu@16.4.2',
+        '@next/swc-linux-arm64-musl@16.4.2',
+        '@next/swc-linux-x64-gnu@16.4.2',
+        '@next/swc-linux-x64-musl@16.4.2',
+        '@next/swc-win32-arm64-msvc@16.4.2',
+        '@next/swc-win32-x64-msvc@16.4.2',
+        // next 把 @playwright/test 声明为 optional peer，pnpm 把仓库根已有的那份
+        // devDependency 绑进了 next 的快照，于是整棵子树跟着 next 被分类成生产依赖
+        // （ZLQ-190 §6.3 观察到的分类变化；三个包均 Apache-2.0，无需新增裁定）
+        '@playwright/test@1.64.1',
+        'playwright@1.64.1',
+        'playwright-core@1.64.1',
+        // API 契约层的运行时分发面
+        'zod@4.6.7',
+        'zod-openapi@6.0.2',
+      ].sort(),
+    );
+
+    // ZLQ-162 时期的裁定（附录 A §3.5 / PM §4.7 精确锁定 6.0.2）没有被推翻：
+    // API 契约层的运行时分发面仍然只有这两个包。单独钉住它，免得这个结论
+    // 在上面的大表里变成噪声 —— 它是许可治理裁定，不是「碰巧只有两个」。
+    expect(prod.filter((id) => id.startsWith('zod'))).toEqual(['zod-openapi@6.0.2', 'zod@4.6.7']);
+
+    // sharp 及其 libvips 平台二进制家族被 pnpm-workspace.yaml 的精确 override 移除了
+    // （ZLQ-190 §6.3：本切片不用图片优化，next.config.ts 的 images.unoptimized 就是前提）。
+    // 这条断言是那道 override 的**可染红对照**：删掉 override，LGPL 家族会重新进闭包。
+    expect(
+      prod.filter((id) => /(^|\/)sharp@|libvips/.test(id)),
+      'sharp / libvips 重新出现在生产闭包里 —— 检查 pnpm-workspace.yaml 的 ' +
+        "'next@16.4.2>sharp': '-' override 是否还在",
+    ).toEqual([]);
+
     expect(result.summary.prod).toBe(prod.length);
     expect(result.summary.dev).toBe(result.entries.length - prod.length);
   });
@@ -297,11 +385,17 @@ describe('真实 lockfile 闭包的审计结论', () => {
     expect(result.orphaned).toEqual([]);
   });
 
-  it('许可档位为 reviewRequired 的条目全部已批准，且批准前提（不分发的 dev 依赖）成立', () => {
+  it('许可档位为 reviewRequired 的条目全部已批准，且每条批准的前提与它的依赖分类相容', () => {
     // ZLQ-162 治理裁定 3 把 13 项待裁定（lightningcss MPL-2.0 ×12、minimatch BlueOak-1.0.0）
     // 全部翻成 approved，于是 verdict === review-required 的条目数归零。断言若还盯着 verdict
     // 就会空转（循环体一次都不执行），所以改成盯**许可档位**：凡是许可本身落在
-    // reviewRequired 的条目，都必须已登记、已批准、批准前提成立、且确实是 dev 依赖。
+    // reviewRequired 的条目，都必须已登记、已批准、批准前提成立。
+    //
+    // ZLQ-190 之前这里还额外要求「每条批准都是 distributed:false 且都是 dev 依赖」。
+    // caniuse-lite 打破了这个全称判断，而且**应当**打破：CC-BY-4.0 是署名许可不是 copyleft，
+    // 它的义务是公开归属，与「是否分发」无关，所以它的批准前提是 distributed:true
+    // （§6.3 的保守口径）。于是把全称断言拆成两条：相容性（每条各自成立）+
+    // 前提归属表（哪条是哪种前提，钉死）。
     const reviewTier = result.entries.filter((item) =>
       (item.ids ?? []).some(
         (id) => classifyLicenseId(id.replace(/\+$/, ''), policy) === VERDICT_REVIEW,
@@ -313,13 +407,40 @@ describe('真实 lockfile 闭包的审计结论', () => {
       const label = `${item.name}@${item.version}（${item.expression}）`;
       expect(item.adjudication, `${label} 未登记裁定条目`).not.toBeNull();
       expect(item.adjudication.status, `${label} 的裁定不是 approved`).toBe(ADJUDICATION_APPROVED);
-      // distributed:false 是批准的**前提**而不是备注：approvalOutOfScope() 按它判断批准是否还适用。
-      expect(item.adjudication.distributed, `${label} 的批准没写明前提`).toBe(false);
+      // distributed 是批准的**前提**而不是备注：approvalOutOfScope() 按它判断批准是否还适用。
+      expect(typeof item.adjudication.distributed, `${label} 的批准没写明前提`).toBe('boolean');
       expect(item.adjudication.outOfScope, `${label} 的批准前提已失效`).toBe(null);
-      expect(item.kind, `${label} 是生产依赖，distributed:false 的批准不适用`).toBe('dev');
+      // 相容性：distributed:false 的批准只对 dev 依赖有效（对生产依赖 approvalOutOfScope()
+      // 会判失效）。distributed:true 的批准不依赖分类，但必须显式声明为 true。
+      if (item.adjudication.distributed === false) {
+        expect(item.kind, `${label} 是生产依赖，distributed:false 的批准不适用`).toBe('dev');
+      }
       expect(item.verdict, `${label} 已批准却未被放行`).toBe(VERDICT_ALLOWED);
       expect(item.link).toBe(npmLink(item.name, item.version));
     }
+
+    // 前提归属表：按裁定条目去重（lightningcss 一条覆盖 13 个包）。
+    // 钉死它是为了让「新增一条批准」或「翻转某条的 distributed」成为有意识的改动。
+    const premiseByAdjudication = Object.fromEntries(
+      reviewTier.map((item) => [item.adjudication.id, item.adjudication.distributed]),
+    );
+    expect(premiseByAdjudication).toEqual({
+      'caniuse-lite-cc-by-4.0-1.0.30001816': true,
+      'lightningcss-mpl-2.0': false,
+      'minimatch-blueoak-1.0.0': false,
+    });
+
+    // distributed:true 的批准覆盖到哪些包，也钉死。它现在只覆盖 caniuse-lite 一个精确版本；
+    // 若哪天多出一个包命中同一条裁定，说明 match 写得比裁定意图宽。
+    const distributable = reviewTier.filter((item) => item.adjudication.distributed === true);
+    expect(distributable.map((item) => `${item.name}@${item.version}`)).toEqual([
+      'caniuse-lite@1.0.30001816',
+    ]);
+    // 它是生产依赖，而批准依然有效 —— 这正是 distributed:true 与 distributed:false 的差别，
+    // 也是 approvalOutOfScope() 对两者给出不同结论的可执行证据。
+    expect(distributable[0].kind).toBe('prod');
+    expect(distributable[0].adjudication.outOfScope).toBe(null);
+
     // 报告里不该再有任何待裁定项。needsAdjudication 是「verdict 仍为 review-required」的清单，
     // approvalsOutOfScope 是「批准前提已失效」的清单 —— 两者都必须为空，门禁才是退出码 0。
     expect(result.summary.needsAdjudication).toEqual([]);
@@ -433,5 +554,12 @@ describe('lockfile 与解析器的辅助函数', () => {
       findAdjudication({ name: 'lightningcss-linux-x64-gnu', version: '1.33.0' }, policy)?.id,
     ).toBe('lightningcss-mpl-2.0');
     expect(findAdjudication({ name: 'zod', version: '4.6.7' }, policy)).toBeNull();
+    // ZLQ-190 §6.3 要求 caniuse-lite 的裁定是**精确版本**的：框架升级带来的新版本
+    // 必须失配、退回 review-required（scan 退出码 2）并要求重新裁定，不能沿用旧批准。
+    // 这两行就是「升级后不会静默放行」这条承诺的可执行形式。
+    expect(findAdjudication({ name: 'caniuse-lite', version: '1.0.30001816' }, policy)?.id).toBe(
+      'caniuse-lite-cc-by-4.0-1.0.30001816',
+    );
+    expect(findAdjudication({ name: 'caniuse-lite', version: '1.0.30001999' }, policy)).toBeNull();
   });
 });

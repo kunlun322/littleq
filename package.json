@@ -11,8 +11,11 @@
   },
   "packageManager": "pnpm@12.11.2",
   "scripts": {
-    "build": "tsc -b tsconfig.json",
-    "typecheck": "tsc -b tsconfig.json && tsc -p tsconfig.test.json && tsc -p tools/tsconfig.json",
+    "build": "tsc -b tsconfig.json && pnpm web:build",
+    "web:build": "pnpm --filter @littleq/design-system build && pnpm bundles && pnpm license:bundle && pnpm web:legal && pnpm --filter @littleq/web build && pnpm web:export:check",
+    "web:legal": "node tools/prepare-web-legal.mjs",
+    "web:export:check": "node tools/check-web-export.mjs",
+    "typecheck": "tsc -b tsconfig.json && tsc -p tsconfig.test.json && tsc -p tsconfig.e2e.json && tsc -p tools/tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

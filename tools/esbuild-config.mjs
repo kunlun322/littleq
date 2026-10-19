@@ -41,15 +41,19 @@ export function createBundleOptions({ entryPoint, outfile, alias, banner = null 
   };
 }
 
-// 横幅只陈述义务与出处，不声称某个站点入口已经存在 —— M1 阶段还没有任何产品页面，
-// 写成「已提供」会是一条虚假的合规声明。/licenses.txt 与 §13 源码入口由后续任务接通。
+// 横幅只陈述义务与出处，且必须与事实一致：这个 bundle 是 @littleq/web 的**合规入口**
+// （单元自述 + 契约可加载性），不是部署到 Vercel 的那份站点产物 —— 后者是 `next build`
+// 的 apps/web/out。所以横幅不说「本文件已挂载到 /licenses.txt」，只说明义务落在哪、
+// 由谁负责。ZLQ-190 §6.1 明确要求：不得用这份 bundle 的扫描结果冒充 Next 产物的合规覆盖。
 export const WEB_BUNDLE_BANNER = [
   '/*!',
   ' * LittleQ — 面向 K12 学生的 AI 编程与创作平台',
   ' * Copyright (C) 2026 LittleQ contributors',
   ' * SPDX-License-Identifier: AGPL-3.0-only',
   ' *',
-  ' * 第三方组件许可证清单与本产物同时生成（<bundle>.licenses.txt），',
-  ' * 上线时须按 ZLQ-153 §10.2 挂载到 /licenses.txt；AGPL-3.0 §13 的源码入口由后续任务接通。',
+  ' * 本文件是 @littleq/web 的合规入口 bundle，不是部署站点。',
+  ' * ZLQ-153 §10.2 的第三方归因清单与它同时生成（<bundle>.licenses.txt），并由',
+  ' * tools/prepare-web-legal.mjs 逐字节复制到站点产物的 /licenses.txt；',
+  ' * AGPL-3.0 §13 的源码入口见站点页脚与 /source-and-license/ 页（ZLQ-190 §7）。',
   ' */',
 ].join('\n');

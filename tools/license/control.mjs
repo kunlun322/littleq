@@ -16,6 +16,11 @@
 // 而不是由一份为通过而写的策略决定 —— 尤其是档位（allowed/reviewRequired/forbidden/spdx）
 // 一旦被派生策略改动，整个控制用例就退化成自证。
 //
+// 另外两条（caseSliceAdjudication / caseSharpOverride）不用夹具，直接跑真实闭包：
+// 它们对照的对象是 ZLQ-190 §6.3 落在线上配置里的那两件事 —— caniuse-lite 的精确裁定
+// 与 pnpm-workspace.yaml 里摘掉 sharp 的 override。夹具能证明规则有效，证明不了
+// 「线上这条配置删掉之后门禁会红」，而后者才是 §6.1 点名要的可染红控制。
+//
 // 退出码：0 全部用例符合预期；1 任一用例不符（含子进程崩溃）。
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -37,6 +42,14 @@ function readRealPolicy() {
   return JSON.parse(readFileSync(POLICY, 'utf8'));
 }
 
+// 派生策略的自检基准：把 adjudications.entries 整块摘掉之后剩下的字节。
+// 两种派生（改字段 / 移除整条）都用它证明「档位与其他配置一个字节没动」。
+function stripAdjudicationEntries(doc) {
+  const { adjudications, ...rest } = doc;
+  const { entries, ...adjudicationRest } = adjudications;
+  return { ...rest, adjudications: adjudicationRest };
+}
+
 // 从线上策略派生一份只改了某条裁定的副本。
 // 返回 onlyEntriesChanged（除裁定条目外字节一致）与 changed（这次改动确实生效），
 // 两条都由调用方断言 —— 前者防自证，后者防「改了个本来就是那个值的字段」这种空对照。
@@ -47,23 +60,42 @@ function derivePolicy(id, set) {
   if (!entry) throw new Error(`派生策略失败：线上策略里没有 id=${id} 的裁定条目`);
   for (const [field, value] of Object.entries(set)) {
     if (!DERIVABLE_FIELDS.has(field)) {
-      throw new Error(`派生策略失败：${field} 不在可派生字段白名单（${[...DERIVABLE_FIELDS].join(' / ')}）内`);
+      throw new Error(
+        `派生策略失败：${field} 不在可派生字段白名单（${[...DERIVABLE_FIELDS].join(' / ')}）内`,
+      );
     }
     entry[field] = value;
   }
-  const strip = (doc) => {
-    const { adjudications, ...rest } = doc;
-    const { entries, ...adjudicationRest } = adjudications;
-    return { ...rest, adjudications: adjudicationRest };
-  };
   const realEntry = real.adjudications.entries.find((item) => item.id === id);
   return {
     label: `${id} ← ${Object.entries(set)
       .map(([field, value]) => `${field}=${JSON.stringify(value)}`)
       .join(', ')}`,
     policy: derived,
-    onlyEntriesChanged: JSON.stringify(strip(real)) === JSON.stringify(strip(derived)),
+    onlyEntriesChanged:
+      JSON.stringify(stripAdjudicationEntries(real)) ===
+      JSON.stringify(stripAdjudicationEntries(derived)),
     changed: JSON.stringify(entry) !== JSON.stringify(realEntry),
+  };
+}
+
+// 「删除裁定」需要的是**移除整条 entry**，不是改字段：ZLQ-190 §6.3 要求框架升级后必须
+// 重新裁定，其失效形态就是这条裁定对当前闭包完全不存在（精确版本失配 = 匹配不上）。
+// 移除同样只动 adjudications.entries，档位与其他配置仍逐字节不变（由 onlyEntriesChanged 断言）。
+function derivePolicyWithout(id) {
+  const real = readRealPolicy();
+  const derived = structuredClone(real);
+  const entries = derived.adjudications?.entries ?? [];
+  const index = entries.findIndex((item) => item.id === id);
+  if (index < 0) throw new Error(`派生策略失败：线上策略里没有 id=${id} 的裁定条目`);
+  entries.splice(index, 1);
+  return {
+    label: `${id} ← 整条移除`,
+    policy: derived,
+    onlyEntriesChanged:
+      JSON.stringify(stripAdjudicationEntries(real)) ===
+      JSON.stringify(stripAdjudicationEntries(derived)),
+    changed: !(derived.adjudications?.entries ?? []).some((item) => item.id === id),
   };
 }
 
@@ -96,6 +128,13 @@ function runScan(fixture, options = {}) {
     // —— 而「三处留痕」的第一处正是它。
     ...extraArgs,
   ];
+  return invokeAndCollect({ args, workdir, out, summaryFile, listFile });
+}
+
+// 跑一次 scan.mjs 并收集它的四件产物：退出码、人读 stdout、报告 JSON、step summary、
+// 待裁定清单。runScan（夹具）与 runRealScan（真实闭包）共用它，两条路径的收集逻辑
+// 因此不可能漂移 —— 否则「夹具那半绿、线上那半红」可能只是收集方式不同。
+function invokeAndCollect({ args, workdir, out, summaryFile, listFile }) {
   const result = spawnSync(process.execPath, args, {
     cwd: REPO_ROOT,
     encoding: 'utf8',
@@ -121,6 +160,30 @@ function runScan(fixture, options = {}) {
     listed: listBody !== '',
     listBody,
   };
+}
+
+// 真实仓库闭包上的扫描。刻意**不传** --installed-root / --installed-layout / --lockfile：
+// 用 scan.mjs 的默认值（node_modules + pnpm 布局 + pnpm-lock.yaml），也就是 `pnpm license:scan`
+// 的那一次调用。这里要对照的是**线上配置**（裁定条目、workspace override），
+// 换成夹具的 flat 布局就等于换掉了被对照的对象。
+function runRealScan(options = {}) {
+  const { extraArgs = [], derived = null } = options;
+  const workdir = mkdtempSync(join(tmpdir(), 'lq-license-control-real-'));
+  const out = join(workdir, 'license-report.json');
+  const summaryFile = join(workdir, 'step-summary.md');
+  const listFile = join(workdir, 'license-adjudication-required.txt');
+  let policyArg = POLICY;
+  if (derived) {
+    policyArg = join(workdir, 'derived-license-policy.json');
+    writeFileSync(policyArg, `${JSON.stringify(derived.policy, null, 2)}\n`, 'utf8');
+  }
+  return invokeAndCollect({
+    args: [SCAN, '--repo-root', REPO_ROOT, '--policy', policyArg, '--out', out, ...extraArgs],
+    workdir,
+    out,
+    summaryFile,
+    listFile,
+  });
 }
 
 class Checker {
@@ -421,6 +484,215 @@ function caseOkStrict(c) {
   return c;
 }
 
+// ── §6.1：线上配置本身的两条可染红对照 ────────────────────────────────────────────
+// 前面六个用例证明的是**规则实现**有效（夹具闭包 + 线上策略）。下面两条证明的是
+// ZLQ-190 §6.3 那两件**线上配置**承重：新增的 caniuse-lite 精确裁定，与
+// pnpm-workspace.yaml 里摘掉 sharp 的精确 override。删掉任一件，门禁必须红，
+// 而且红在能指认原因的地方 —— 「删了裁定也照样绿」正是 §6.1 要这条控制去堵的洞。
+//
+// 这两条跑在真实闭包上（不是夹具）：承重的对象是线上配置与真实 lockfile，
+// 换成夹具就等于换掉了被对照的东西。
+//
+// 「控制断言按声明表推导，不抄实测总数」：下面没有任何一处写死闭包总量、包版本或
+// 许可证档位。包名与精确版本取自线上策略的 match 字段，next 版本取自本次扫描的
+// 实际解析结果，LGPL 家族取自策略的 reviewRequired.exact。
+
+// 声明表：本切片承重的裁定**对象**，只写不随依赖升级变化的事实 —— 包名、许可类、
+// §6.3 登记的批准前提、生产依赖身份。刻意**不写** version 与裁定条目 id：
+// 两者都是观测量。把 `1.0.30001816` 抄进来会让「框架升级后必须重新裁定」失去对照 ——
+// 升级之后先红在一个过期常量上，而不是红在「旧裁定失配」这个真正的原因上；
+// 把 id 抄进来更糟：条目一旦不在策略里，这里会**抛异常**，控制用例退化成
+// 「崩溃 → 退出码 1」，看起来像门禁变红了，实际上什么也没证明。
+// 所以 version 与 id 一律从**本次真实扫描的报告**里反查，反查不到就是一条 FAIL 断言。
+const SLICE_ADJUDICATIONS = [
+  { name: 'caniuse-lite', license: 'CC-BY-4.0', distributed: true, kind: 'prod' },
+];
+
+function caseSliceAdjudication(c) {
+  const policy = readRealPolicy();
+  const run = runRealScan();
+  c.useCase('license-scan（真实闭包 + 线上裁定 → 期望退出码 0）');
+  c.check('退出码', run.exitCode, 0);
+  c.checkTrue('报告已写出', run.report && !run.report.parseError);
+  if (!run.report) return c;
+
+  for (const declared of SLICE_ADJUDICATIONS) {
+    // 报告的字段是 `entries`；不用 Checker.entry() 是因为那个助手要求调用方**先知道版本**，
+    // 而这里版本必须由扫描结果给出，否则「声明表里的版本」与「闭包里的版本」哪个过期就无从分辨。
+    const matches = (run.report.entries ?? []).filter((item) => item.name === declared.name);
+    const found = matches.length === 1 ? matches[0] : null;
+    const label = found ? `${found.name}@${found.version}` : `${declared.name}@<未唯一定位>`;
+    const id = found?.adjudication?.id ?? null;
+
+    c.useCase(`裁定承重：${label}${id ? `（${id}）` : ''}`);
+    // 先证明对照非空：包不在闭包里的话，下面每一条都会因为「没有 reviewRequired」而假绿。
+    // 断「恰好一个版本」而不是「至少一个」：裁定是精确版本的，闭包里若同时存在两个
+    // caniuse-lite，未被裁定的那个本来就该把门禁顶红，这里含糊过去就等于放行。
+    c.check(`${declared.name} 在真实闭包里的版本数`, matches.length, 1);
+    c.checkTrue(`${declared.name} 已被唯一定位`, found !== null);
+    if (!found) continue;
+
+    // 「这个包靠一条精确裁定过关」是本案的正命题。id 为 null 说明裁定已经不在册，
+    // 此时上面那条 `退出码 = 0` 已经先红了 —— 这里再红一次，把原因写在断言里，
+    // 而不是让整份控制用例抛异常收场。
+    c.checkTrue('有裁定条目在册（不是靠放宽档位通过的）', id !== null);
+    c.check('被裁定抬到 allowed', found.verdict, 'allowed');
+    c.check('许可表达式与声明的许可类一致', found.expression, declared.license);
+    c.check('裁定状态', found.adjudication?.status, 'approved');
+    c.check('批准前提写进报告', found.adjudication?.distributed, declared.distributed);
+    c.check('批准前提未失效', found.adjudication?.outOfScope, null);
+    // distributed:true 是 §6.3 的保守口径。它让 approvalOutOfScope() 对这条恒不触发，
+    // 于是「它只在构建期被读、数据没进产物」不会变成放行的隐含前提 —— 署名许可的
+    // 放行理由必须是「归属已公开」，不是「反正没分发」。
+    c.check('生产依赖身份（所以 distributed:true 是承重的）', found.kind, declared.kind);
+
+    if (id !== null) {
+      const matched = (policy.adjudications?.entries ?? []).find((item) => item.id === id);
+      c.checkTrue(`策略里能按报告给出的 id 找回这条裁定（${id}）`, matched !== null);
+      // §6.3 的批准是**精确版本**的。这两条就是「精确」二字的对照：
+      // 报告反查出来的 id 必须只认这个名字、这个版本，不能是 `names:['*']` 之类的宽口。
+      c.check('裁定只认这个包名', matched?.match?.names, [declared.name]);
+      c.check('裁定只认这个精确版本', matched?.match?.versions, [found.version]);
+      c.check('裁定登记的许可类与声明一致', matched?.license, declared.license);
+    }
+
+    // 裁定不得顺手放宽档位：许可类仍留在 reviewRequired，不进六项白名单。
+    // 少了这两条，「把 CC-BY-4.0 加进 allowed」也能让上面全绿，而那是 §6.3 明确禁止的解法。
+    c.checkTrue(
+      `档位未放宽：${declared.license} 仍在 reviewRequired.exact`,
+      policy.reviewRequired.exact.includes(declared.license),
+    );
+    c.checkTrue(
+      `档位未放宽：${declared.license} 不在 allowed 白名单`,
+      !policy.allowed.includes(declared.license),
+    );
+
+    if (id === null) continue;
+
+    // 红的一半 A：整条裁定消失（= 框架升级后精确版本失配的最坏形态）→ 必须退回待裁定。
+    const removed = derivePolicyWithout(id);
+    c.checkDerived(removed);
+    const soft = runRealScan({ derived: removed });
+    c.useCase(`删除裁定 ${id} → 门禁必须红（待裁定，不是判死）`);
+    c.check('退出码', soft.exitCode, 2);
+    c.check('逐条退回未登记待裁定', soft.report?.summary.unregisteredReviewRequired, [label]);
+    c.check(
+      '报告里不再列出这条裁定',
+      (soft.report?.policy.adjudications ?? []).some((item) => item.id === id),
+      false,
+    );
+    c.check('批准前提失效清单仍为空（这是「没人裁定」，不是「批准过期」）', soft.report?.summary.approvalsOutOfScope, []);
+    c.checkTrue('stdout 点名', soft.stdout.includes(label));
+    c.checkTrue('待裁定清单文件已写出', soft.listed);
+    c.checkTrue('清单文件标 MISSING', soft.listBody.includes('MISSING'));
+    c.checkTrue('step summary 点名', soft.stepSummary.includes(label));
+
+    // 红的一半 B：裁定被驳回 → 必须从 2 变 1。少了这一条，「删掉裁定」与「驳回裁定」
+    // 在门禁看来就没区别，而它们的人工处理动作完全不同（重裁 vs 换依赖）。
+    const rejected = derivePolicy(id, { status: 'rejected' });
+    c.checkDerived(rejected);
+    const dead = runRealScan({ derived: rejected });
+    c.useCase(`裁定 ${id} 改为 rejected → 退出码必须从 2 变 1`);
+    c.check('退出码', dead.exitCode, 1);
+    c.check('判死清单', dead.report?.summary.forbidden, [label]);
+    c.checkTrue('stdout 点名禁止项', dead.stdout.includes(label));
+  }
+  return c;
+}
+
+// sharp 家族的匹配规则（声明表）。三条各自独立：pnpm 的 override 只摘掉了入口包，
+// 真正要挡住的是它拖进来的那一串平台二进制。
+const SHARP_FAMILY = [
+  { test: (name) => name === 'sharp', why: 'sharp 本体：自身 Apache-2.0，但它是 libvips 家族的入口' },
+  { test: (name) => name.startsWith('@img/'), why: '@img/sharp-* 与 @img/sharp-libvips-*：libvips 预编译平台二进制（LGPL 家族）' },
+  { test: (name) => name.includes('libvips'), why: 'libvips 本体（LGPL 家族）' },
+];
+
+function sharpFamilyHits(names) {
+  return names
+    .map((name) => ({ name, why: SHARP_FAMILY.find((rule) => rule.test(name))?.why ?? null }))
+    .filter((item) => item.why !== null);
+}
+
+// libvips 家族在 SPDX 上的全部写法。这是声明表，断言则由策略的 reviewRequired.exact 推导：
+// 「这个家族一旦回来会红」不是靠嘴说，而是靠它命中的档位。
+const LIBVIPS_LICENSES = [
+  'LGPL-2.1-only',
+  'LGPL-2.1-or-later',
+  'LGPL-2.1',
+  'LGPL-3.0-only',
+  'LGPL-3.0-or-later',
+  'LGPL-3.0',
+];
+
+function caseSharpOverride(c) {
+  // 反空对照：家族匹配器必须**能**命中东西，否则「闭包里没有 sharp」是 0 进 0 出的空断言，
+  // 把三条规则全删掉它照样通过。探针里 'sharp-axe' 是反向判别项：写成 /sharp/ 就会误命中。
+  const PROBE = [
+    'sharp',
+    '@img/sharp-linux-x64',
+    '@img/sharp-libvips-linux-x64',
+    'libvips',
+    'sharp-axe',
+    'zod',
+    'next',
+  ];
+  c.useCase('sharp 家族匹配器的反空对照');
+  c.check(
+    '匹配器命中该命中的、放过该放过的',
+    sharpFamilyHits(PROBE).map((item) => item.name),
+    ['sharp', '@img/sharp-linux-x64', '@img/sharp-libvips-linux-x64', 'libvips'],
+  );
+
+  const run = runRealScan();
+  const entries = run.report?.entries ?? [];
+  c.useCase('sharp override 承重（真实闭包里必须一个家族成员都没有）');
+  c.check('退出码', run.exitCode, 0);
+  c.check('真实闭包里没有 sharp/libvips 家族', sharpFamilyHits(entries.map((item) => item.name)), []);
+
+  // override 必须精确到**当前解析出来的** next 版本：版本从本次报告里读，不写死。
+  // next 升级而 override 键没跟上 → 这条对照红，而 pnpm 会因为键失配静默不生效。
+  const next = entries.find((item) => item.name === 'next');
+  c.checkTrue('闭包里读得到 next 的解析版本', Boolean(next?.version));
+  const expectedOverride = `'next@${next?.version}>sharp': '-'`;
+  const workspaceYaml = readFileSync(join(REPO_ROOT, 'pnpm-workspace.yaml'), 'utf8');
+  const overrideLine = workspaceYaml
+    .split('\n')
+    .find((line) => line.includes(expectedOverride));
+  c.useCase(`override 在册且精确：${expectedOverride}`);
+  c.checkTrue('pnpm-workspace.yaml 里有这条 override', overrideLine !== undefined);
+  c.checkTrue(
+    'override 不是被注释掉的',
+    overrideLine !== undefined && !overrideLine.trimStart().startsWith('#'),
+  );
+  // pnpm 12 只 WARN 不报错地忽略 package.json 的 `pnpm` 字段：override 挪过去等于删掉它。
+  const rootManifest = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
+  c.check(
+    'override 没被挪到 pnpm 12 不读的 package.json#pnpm 字段',
+    rootManifest.pnpm?.overrides ?? null,
+    null,
+  );
+
+  // 「家族回来了会红」的另一半前提：档位没被放宽，而且没有任何裁定条目静默放行它。
+  // §6.3 要求的是「通过精确 override 移除，而不是静默批准」。
+  const policy = readRealPolicy();
+  c.useCase('sharp 家族没有被静默批准');
+  c.check(
+    'libvips 的 LGPL 全档仍在 reviewRequired.exact',
+    LIBVIPS_LICENSES.filter((id) => policy.reviewRequired.exact.includes(id)),
+    LIBVIPS_LICENSES,
+  );
+  const adjudicatedNames = (policy.adjudications?.entries ?? []).flatMap((entry) => [
+    ...(entry.match?.names ?? []),
+    ...(entry.match?.prefixes ?? []),
+  ]);
+  c.check('家族未出现在任何裁定条目里', sharpFamilyHits(adjudicatedNames), []);
+  // 「LGPL 进了闭包 → review-required → 退出码 2」这半条不由本用例重复证明：caseReview 的
+  // lgplfixture@1.1.0 已经在同一份线上策略下把它判红了。本用例证明的是另一半 ——
+  // 这个家族此刻不在闭包里，而让它不在的那条 override 精确、在册、没被挪走。
+  return c;
+}
+
 // 用例名固定在这里，不取 c.caseName：一个用例内部会切换子场景（派生策略、--strict 复跑），
 // 取「最后一次 useCase 的名字」会让汇总表贴错标签。
 const CASES = [
@@ -433,6 +705,15 @@ const CASES = [
   { label: 'license-review + 派生策略（pending → 2；rejected → 1）', fn: caseAdjudicationStatuses },
   { label: 'license-violation（禁止/未知 → 期望退出码 1）', fn: caseViolation },
   { label: 'license-ok --strict（无待裁定 → 期望退出码 0）', fn: caseOkStrict },
+  {
+    label:
+      '线上裁定承重（真实闭包 → 0；整条删除 → 2 并点名；改为 rejected → 1；档位未被放宽）',
+    fn: caseSliceAdjudication,
+  },
+  {
+    label: 'sharp override 承重（匹配器反空对照；真实闭包无家族成员；override 精确在册；家族未被静默批准）',
+    fn: caseSharpOverride,
+  },
 ];
 
 function main() {
@@ -450,7 +731,10 @@ function main() {
   } else {
     process.stdout.write('== 许可证门禁控制用例 ==\n');
     process.stdout.write(`策略：${relative(REPO_ROOT, POLICY)}（线上真策略，非夹具副本）\n`);
-    process.stdout.write('派生策略：只改 adjudications.entries 的 status/distributed，其余字节与线上策略一致（已断言）\n');
+    process.stdout.write(
+      '派生策略：只改 adjudications.entries 的 status/distributed（或整条移除），其余字节与线上策略一致（已断言）\n',
+    );
+    process.stdout.write('线上配置对照：真实闭包（node_modules + pnpm 布局 + pnpm-lock.yaml），非夹具\n');
     for (const item of perCase) {
       process.stdout.write(`  ${item.failures === 0 ? 'OK  ' : 'FAIL'} ${item.case}\n`);
     }
@@ -459,7 +743,8 @@ function main() {
     if (c.failures.length === 0) {
       process.stdout.write(
         '结论：三档退出码（0 / 2 / 1）与判定明细均符合预期，门禁不是「永远返回 0」；' +
-          '批准前提失效与裁定状态机（pending / rejected）各有判别性对照。\n',
+          '批准前提失效与裁定状态机（pending / rejected）各有判别性对照；' +
+          'ZLQ-190 §6.3 的两件线上配置（caniuse-lite 精确裁定、sharp override）各自可染红。\n',
       );
     }
   }
@@ -469,4 +754,4 @@ function main() {
 const invokedDirect = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (invokedDirect) main();
 
-export { Checker, derivePolicy, runScan };
+export { Checker, derivePolicy, derivePolicyWithout, runRealScan, runScan };

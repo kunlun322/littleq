@@ -1,0 +1,474 @@
+/**
+ * 主站样式（ZLQ-190 §5.2 / §5.3）。
+ *
+ * 这里**只有布局与外观**，没有任何颜色、间距、字号或分龄档位的原始值 ——
+ * 全部通过 `var(--lq-*)` 取自 `@littleq/design-system/tokens.css`（在 `app/layout.tsx` 里
+ * 以副作用方式先行导入）。§5.2 明令禁止在应用侧重定义品牌色 / 间距 / 分龄变量，
+ * 因为那会让「跨端一致」退化成一句声明。
+ *
+ * 唯一允许出现字面量的地方是与令牌无关的纯几何（例如小黄鸭各部件的定位百分比）
+ * 与减动偏好媒体查询里的 0.01ms。
+ */
+
+/* ── 基础 ─────────────────────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.lq-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── 页面骨架 ─────────────────────────────────────────────────────────── */
+
+.lq-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.lq-container {
+  width: 100%;
+  max-width: var(--lq-content-max-width);
+  margin-inline: auto;
+  padding-inline: var(--lq-content-gutter);
+}
+
+.lq-header {
+  border-bottom: 1px solid var(--lq-color-border);
+  background-color: var(--lq-color-surface);
+}
+
+.lq-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lq-space-4);
+  padding-block: var(--lq-space-4);
+}
+
+.lq-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lq-space-2);
+  font-size: var(--lq-font-size-lg);
+  font-weight: var(--lq-font-weight-bold);
+  color: var(--lq-color-ink);
+  text-decoration: none;
+}
+
+.lq-wordmark-mark {
+  display: inline-block;
+  width: 0.875em;
+  height: 0.875em;
+  border-radius: var(--lq-radius-pill);
+  background-color: var(--lq-color-brand);
+  border: 2px solid var(--lq-color-on-brand);
+}
+
+.lq-header-nav {
+  font-size: var(--lq-font-size-sm);
+}
+
+.lq-main {
+  flex: 1 0 auto;
+}
+
+.lq-section {
+  padding-block: var(--lq-space-7);
+}
+
+.lq-section + .lq-section {
+  border-top: 1px solid var(--lq-color-border);
+}
+
+.lq-section-title {
+  margin: 0 0 var(--lq-space-3);
+  font-size: var(--lq-font-size-xl);
+  line-height: var(--lq-line-height-tight);
+  font-weight: var(--lq-font-weight-bold);
+  color: var(--lq-color-ink);
+}
+
+.lq-section-lead {
+  margin: 0 0 var(--lq-space-5);
+  max-width: 62ch;
+  color: var(--lq-color-ink-soft);
+}
+
+/* ── 品牌英雄区（§5.1 第 1 块）────────────────────────────────────────── */
+
+.lq-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--lq-space-6);
+  padding-block: var(--lq-space-8);
+}
+
+.lq-hero-title {
+  margin: 0 0 var(--lq-space-4);
+  max-width: 20ch;
+  font-size: var(--lq-font-size-3xl);
+  line-height: var(--lq-line-height-tight);
+  font-weight: var(--lq-font-weight-bold);
+  color: var(--lq-color-ink);
+}
+
+.lq-hero-lead {
+  margin: 0 0 var(--lq-space-5);
+  max-width: 56ch;
+  font-size: var(--lq-font-size-lg);
+  color: var(--lq-color-ink-soft);
+}
+
+@media (max-width: 44rem) {
+  .lq-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── 纯 CSS 小黄鸭（§5.1：仓库内原创几何造型，不引入任何第三方图片/字体）── */
+
+.lq-duckling {
+  position: relative;
+  inline-size: 12rem;
+  block-size: 12rem;
+  flex: none;
+}
+
+.lq-duckling-body,
+.lq-duckling-head,
+.lq-duckling-beak,
+.lq-duckling-eye,
+.lq-duckling-wing {
+  position: absolute;
+}
+
+.lq-duckling-body {
+  inset-block-end: 6%;
+  inset-inline-start: 12%;
+  inline-size: 76%;
+  block-size: 58%;
+  border-radius: 50% 50% 46% 46%;
+  background-color: var(--lq-color-brand);
+  border: 3px solid var(--lq-color-on-brand);
+}
+
+.lq-duckling-head {
+  inset-block-start: 6%;
+  inset-inline-end: 16%;
+  inline-size: 42%;
+  block-size: 42%;
+  border-radius: var(--lq-radius-pill);
+  background-color: var(--lq-color-brand);
+  border: 3px solid var(--lq-color-on-brand);
+}
+
+.lq-duckling-beak {
+  inset-block-start: 24%;
+  inset-inline-end: 4%;
+  inline-size: 0;
+  block-size: 0;
+  border-block: 0.7rem solid transparent;
+  border-inline-start: 1.5rem solid var(--lq-color-brand-deep);
+}
+
+.lq-duckling-eye {
+  inset-block-start: 18%;
+  inset-inline-end: 28%;
+  inline-size: 0.625rem;
+  block-size: 0.625rem;
+  border-radius: var(--lq-radius-pill);
+  background-color: var(--lq-color-on-brand);
+}
+
+.lq-duckling-wing {
+  inset-block-end: 22%;
+  inset-inline-start: 26%;
+  inline-size: 34%;
+  block-size: 26%;
+  border-radius: 60% 40% 55% 45%;
+  background-color: var(--lq-color-surface);
+  border: 3px solid var(--lq-color-on-brand);
+}
+
+/* ── 诚实状态条（§5.1 第 2 块）────────────────────────────────────────── */
+
+.lq-status {
+  display: grid;
+  gap: var(--lq-space-2);
+  padding: var(--lq-space-5);
+  border-radius: var(--lq-radius-md);
+  border-inline-start: 6px solid var(--lq-color-brand-deep);
+  background-color: var(--lq-color-surface-raised);
+}
+
+.lq-status-heading {
+  margin: 0;
+  font-size: var(--lq-font-size-lg);
+  font-weight: var(--lq-font-weight-bold);
+  color: var(--lq-color-ink);
+}
+
+.lq-status-body {
+  margin: 0;
+  color: var(--lq-color-ink-soft);
+}
+
+/* ── 分龄卡片（§5.1 第 3 块，三档密度绑定 tokens.css 的三组变量）────────── */
+
+.lq-band-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--lq-space-5);
+}
+
+.lq-band {
+  display: grid;
+  gap: var(--lq-density-l2-gap);
+  padding: var(--lq-density-l2-padding);
+  border-radius: var(--lq-density-l2-radius);
+  border: 1px solid var(--lq-color-border);
+  background-color: var(--lq-color-surface);
+  box-shadow: var(--lq-shadow-raised);
+  font-size: calc(var(--lq-font-size-base) * var(--lq-density-l2-font-scale));
+  color: var(--lq-density-l2-text-color);
+}
+
+.lq-band--l1 {
+  gap: var(--lq-density-l1-gap);
+  padding: var(--lq-density-l1-padding);
+  border-radius: var(--lq-density-l1-radius);
+  border-width: 2px;
+  font-size: calc(var(--lq-font-size-base) * var(--lq-density-l1-font-scale));
+  color: var(--lq-density-l1-text-color);
+}
+
+.lq-band--l3 {
+  gap: var(--lq-density-l3-gap);
+  padding: var(--lq-density-l3-padding);
+  border-radius: var(--lq-density-l3-radius);
+  font-size: calc(var(--lq-font-size-base) * var(--lq-density-l3-font-scale));
+  color: var(--lq-density-l3-text-color);
+}
+
+.lq-band-id {
+  display: inline-block;
+  align-self: start;
+  margin: 0;
+  padding-inline: var(--lq-space-3);
+  padding-block: var(--lq-space-1);
+  border-radius: var(--lq-radius-pill);
+  background-color: var(--lq-color-brand);
+  color: var(--lq-color-on-brand);
+  font-size: var(--lq-font-size-xs);
+  font-weight: var(--lq-font-weight-bold);
+  letter-spacing: 0.04em;
+}
+
+.lq-band-name {
+  margin: 0;
+  font-size: 1.25em;
+  line-height: var(--lq-line-height-tight);
+  font-weight: var(--lq-font-weight-bold);
+  color: var(--lq-color-ink);
+}
+
+.lq-band-summary {
+  margin: 0;
+  max-width: var(--lq-density-l2-measure);
+}
+
+.lq-band--l1 .lq-band-summary {
+  max-width: var(--lq-density-l1-measure);
+}
+
+.lq-band--l3 .lq-band-summary {
+  max-width: var(--lq-density-l3-measure);
+}
+
+.lq-band-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lq-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lq-band-trait {
+  padding-inline: var(--lq-space-2);
+  padding-block: var(--lq-space-1);
+  border: 1px solid var(--lq-color-border);
+  border-radius: var(--lq-radius-sm);
+  background-color: var(--lq-color-surface-raised);
+  font-size: var(--lq-font-size-xs);
+  color: var(--lq-color-ink);
+}
+
+/* ── 交付范围（§5.1 第 4 块）──────────────────────────────────────────── */
+
+.lq-scope {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--lq-space-5);
+}
+
+.lq-scope-block {
+  padding: var(--lq-space-5);
+  border-radius: var(--lq-radius-md);
+  border: 1px solid var(--lq-color-border);
+  background-color: var(--lq-color-surface-raised);
+}
+
+.lq-scope-title {
+  margin: 0 0 var(--lq-space-3);
+  font-size: var(--lq-font-size-base);
+  font-weight: var(--lq-font-weight-bold);
+  color: var(--lq-color-ink);
+}
+
+.lq-scope-list {
+  margin: 0;
+  padding-inline-start: var(--lq-space-5);
+  color: var(--lq-color-ink-soft);
+}
+
+.lq-scope-list li + li {
+  margin-block-start: var(--lq-space-2);
+}
+
+/* ── 唯一主行动（§5.1 第 5 块）────────────────────────────────────────── */
+
+.lq-cta {
+  display: inline-block;
+  padding-inline: var(--lq-space-5);
+  padding-block: var(--lq-space-3);
+  border-radius: var(--lq-radius-pill);
+  background-color: var(--lq-color-accent);
+  color: var(--lq-color-surface);
+  font-size: var(--lq-font-size-base);
+  font-weight: var(--lq-font-weight-medium);
+  text-decoration: none;
+  transition: background-color var(--lq-motion-duration) var(--lq-motion-easing);
+}
+
+.lq-cta:hover {
+  background-color: var(--lq-color-ink);
+}
+
+.lq-link {
+  color: var(--lq-color-accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+/* ── 页脚（§5.1 第 6 块 / §7 D5：常驻，白标替换后仍必须保留）────────────── */
+
+.lq-footer {
+  flex: none;
+  border-top: 1px solid var(--lq-color-border);
+  background-color: var(--lq-color-surface-raised);
+  padding-block: var(--lq-space-5);
+  font-size: var(--lq-font-size-sm);
+  color: var(--lq-color-ink-soft);
+}
+
+.lq-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lq-space-4);
+  justify-content: space-between;
+}
+
+.lq-footer-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lq-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lq-footer-commit {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: var(--lq-font-size-xs);
+}
+
+/* ── 法务页（§7 D5）───────────────────────────────────────────────────── */
+
+.lq-legal-grid {
+  display: grid;
+  gap: var(--lq-space-4);
+}
+
+.lq-legal-card {
+  padding: var(--lq-space-5);
+  border: 1px solid var(--lq-color-border);
+  border-radius: var(--lq-radius-md);
+  background-color: var(--lq-color-surface);
+}
+
+.lq-legal-card-title {
+  margin: 0 0 var(--lq-space-2);
+  font-size: var(--lq-font-size-base);
+  font-weight: var(--lq-font-weight-bold);
+  color: var(--lq-color-ink);
+}
+
+.lq-legal-card-body {
+  margin: 0;
+  color: var(--lq-color-ink-soft);
+}
+
+.lq-legal-file-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--lq-space-3);
+}
+
+.lq-definition {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--lq-space-2) var(--lq-space-4);
+  margin: 0;
+}
+
+.lq-definition dt {
+  font-weight: var(--lq-font-weight-medium);
+  color: var(--lq-color-ink);
+}
+
+.lq-definition dd {
+  margin: 0;
+  color: var(--lq-color-ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.lq-code {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: var(--lq-font-size-xs);
+  color: var(--lq-color-ink);
+}

@@ -5,8 +5,11 @@
   // 参数类型标注对「一个只被 CI 调用、且已有可执行控制用例的脚本」没有收益。
   // 因此这里只做解析级检查——allowJs 让 tsc 仍然逐个 parse 这些文件（语法错误、
   // import 路径写错都会被抓到），行为正确性交给控制用例证明：
-  //   tools/license/control.mjs        131 条断言，四份夹具覆盖 0 / 1 / 2 三档退出码
-  //                                    （含派生策略对照：批准前提失效、pending、rejected）
+  //   tools/license/control.mjs        四份夹具覆盖 0 / 1 / 2 三档退出码（含派生策略对照：
+  //                                    批准前提失效、pending、rejected），外加两条跑在
+  //                                    **真实闭包**上的对照，证明线上那两件配置承重：
+  //                                    caniuse-lite 的精确裁定与 pnpm-workspace.yaml 的
+  //                                    sharp override（断言条数由它自己运行时打印，不写死在这里）
   //   tools/check-dependency-graph.mjs --expect-failures 8   故意植入的 8 处违规必须全部命中
   //   tools/contracts/control.mjs      契约门禁对照：每条方差规则一对红/绿 fixture，
   //                                    基线不可得与 bootstrap 只允许一次也各有专例

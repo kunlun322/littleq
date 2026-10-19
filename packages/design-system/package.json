@@ -4,17 +4,19 @@
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
-  "description": "LittleQ 设计系统骨架（ZLQ-153 §1.3）：跨端一致的视觉与交互基元，不耦合业务数据请求。",
+  "description": "LittleQ 设计系统（ZLQ-153 §1.3 / ZLQ-190 §5.2）：跨端一致的视觉与交互基元，不耦合业务数据请求。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./tokens.css": "./src/tokens.css"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/tokens.css"
   ],
   "scripts": {
     "build": "tsc -b"

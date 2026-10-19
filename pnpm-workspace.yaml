@@ -2,6 +2,21 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
+# ZLQ-190 §3.1 / §6.3：把 sharp 从 next 的依赖闭包里**显式摘掉**，而不是给它办许可裁定。
+#
+# sharp 自身是 Apache-2.0，但它拖进来的 libvips 平台二进制家族是 LGPL —— 本切片只做
+# `output: 'export'` 的静态导出，`next.config.ts` 里同时固定了 `images.unoptimized: true`，
+# 图片优化链路根本不会被执行，因此这个依赖是纯粹的许可与体积负担。
+#
+# `'-'` 是 pnpm 12 合法的「移除此依赖」override 值。它必须写在**这个文件**里：
+# pnpm 12 已不再读取 package.json 的 `pnpm` 字段（只 WARN，不报错），写在那里会静默失效，
+# sharp/libvips 家族会悄悄进闭包。
+#
+# 这条 override 同时是 `pnpm license:control` 的一个可染红对照：删掉它 → LGPL 家族重新进闭包
+# → 严格扫描必须红（见 tools/license/control.mjs 的 caseSharpOverride）。
+overrides:
+  'next@16.4.2>sharp': '-'
+
 # 刻意不执行依赖的安装脚本（收敛供应链攻击面）。pnpm 12 用 allowBuilds 表达该决定：
 # 值为 false 即显式拒绝其生命周期脚本；未显式表态会让 install 以
 # ERR_PNPM_IGNORED_BUILDS 失败，因此这里必须逐条列出。

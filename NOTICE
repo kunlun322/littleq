@@ -43,4 +43,10 @@ AGPL-3.0 代码授权范围内，适用单独授权条款。条款由项目所�
 第三方内容
 
 随仓库分发的字体、图片、音效等素材必须具有可再分发的商用授权，其许可清单
-与代码依赖许可清单分开维护。当前仓库尚未包含任何第三方素材或代码依赖。
+与代码依赖许可清单分开维护。当前仓库尚未包含任何第三方**素材**（站点上的
+小黄鸭造型是仓库内原创 CSS 几何图形，不使用外部图片、字体或 CDN）。
+
+代码依赖的许可清单是仓库根目录的 THIRD_PARTY_LICENSES 文件，由
+`pnpm license:third-party` 从 pnpm-lock.yaml 的完整依赖闭包生成，并由
+`pnpm license:third-party:check` 逐字节校验；它随站点部署到
+/legal/THIRD_PARTY_LICENSES.txt。构建产物另有旁挂的 /licenses.txt 归因清单。
