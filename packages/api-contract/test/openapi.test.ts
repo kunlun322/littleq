@@ -617,9 +617,18 @@ describe('请求面与响应面的 media type', () => {
     ]);
   });
 
-  it('只有字段全 optional 的三个 body 是 required:false，其余写接口都是 true', () => {
+  it('只有字段全 optional 的四个 body 是 required:false，其余写接口都是 true', () => {
     const { json } = generated();
-    const optionalBody = new Set(['createPreview', 'restoreProjectVersion', 'retryTask']);
+    // 这份名单刻意**手写**、不从产物推导：从 openapi.json 反算「哪些 body 全 optional」
+    // 会让这条断言恒绿（它只是把生成器的输出复述一遍），而它要抓的恰恰是生成器被喂了
+    // 一个错误的 required。四个成员的共同点是语义上允许空 body：预览与版本恢复的参数
+    // 全在路径里，重试与撤销只需要一个可选注记。
+    const optionalBody = new Set([
+      'createPreview',
+      'restoreProjectVersion',
+      'retryTask',
+      'revokeSecret',
+    ]);
     const problems: string[] = [];
     for (const { operation } of operationsOf(json)) {
       const body = operation.requestBody as { readonly required?: boolean } | undefined;
