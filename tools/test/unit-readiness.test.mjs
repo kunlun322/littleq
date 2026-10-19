@@ -147,13 +147,8 @@ describe('真实仓库的就绪门禁', () => {
       expect(resolved[unit].status, unit).toBe('implemented');
   });
 
-  it('四个已实现但还没采用 unitReadiness 声明的单元被显式列出，不是静默放过', () => {
-    expect(scan(REPO_ROOT).pendingDeclaration).toEqual([
-      'apps/web',
-      'packages/api-contract',
-      'packages/design-system',
-      'packages/domain',
-    ]);
+  it('两个已实现但还没采用 unitReadiness 声明的单元被显式列出，不是静默放过', () => {
+    expect(scan(REPO_ROOT).pendingDeclaration).toEqual(['apps/web', 'packages/design-system']);
   });
 
   it('命令行直跑真实仓库返回 0', () => {
