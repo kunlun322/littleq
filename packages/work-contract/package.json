@@ -20,6 +20,9 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "acorn": "8.19.0",
+    "parse5": "8.0.1",
+    "postcss": "8.5.30",
     "zod": "4.6.7"
   }
 }

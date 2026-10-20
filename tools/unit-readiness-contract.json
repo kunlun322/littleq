@@ -182,7 +182,7 @@
           "ContractVersion"
         ],
         "dependencies": ["zod"],
-        "frozenDependencies": []
+        "frozenDependencies": ["acorn", "parse5", "postcss"]
       }
     }
   },
@@ -255,7 +255,7 @@
         "consumedBy": ["packages/infra"],
         "ticket": "D4",
         "spec": "ZLQ-194 §6.2；ZLQ-195 §3.4；PRD C21 Vercel-first",
-        "caveat": "**与设计有一处不符，需架构师裁定，D4 二选一**：§6.2 写的是「私有对象存储 + 短期只读 URL」，而 Vercel Blob 的 URL 是公开可猜混淆、无过期、不提供 presign，严格说满足不了「私有」与「短期」。冻它的理由是 §3.4 的取舍规则（宁多冻一条也不让 D4 卡住）加 C21 Vercel-first：S3 兼容方案要额外准备一个外部 bucket，在 Hobby 计划上是更大的运维负担，架构师很可能裁给 Blob。若裁定选 S3，本条与它的 lock 条目一并摘除即可，不影响其余七条。",
+        "caveat": "**已按 ZLQ-201 裁定更正**（原文「Vercel Blob 的 URL 是公开可猜混淆、无过期、不提供 presign」与「D4 二选一」两处均已过期）：`@vercel/blob@2.8.2` **确实**导出 `issueSignedToken({ operations, validUntil })` 与 `presignUrl(...)` —— 省略 `operations` 默认仅允许 `get`，省略 `validUntil` 默认约一小时 —— 既支持 private Blob（`access` 取 `'public' | 'private'`，put 时必填），也支持限时只读 presign，所以 §6.2 的「私有对象存储 + 短期只读 URL」用 SDK 本身即可表达；选型已定为 Vercel Blob private store，不再与 S3 兼容方案二选一。LittleQ 仍选择 **≤300 秒的平台 opaque grant URL**、不直接下发 provider presign，理由**不是** SDK 缺该能力，而是平台层需要执行 presign 本身给不了的四件事：撤销、最多 8 路并发租约、跨 Range 请求累计字节计账、URL/token 集中脱敏。",
         "note": "ObjectStore 端口的 Vercel Blob 实现，作为 s3-client / s3-request-presigner 的替代路径同时冻结。"
       },
       {
