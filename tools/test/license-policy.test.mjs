@@ -313,12 +313,25 @@ describe('真实 lockfile 闭包的审计结论', () => {
     //
     // ZLQ-195 §3.4 让这张表从 28 行变成 102 行：D0 一次性冻结 D1–D6 的第三方依赖，
     // 于是 Neon / pg / S3 / Blob / cookie / server-only 及其全部传递依赖进入生产闭包。
-    // **逐项过了一遍**（§3.4 的硬要求）：102 项的许可档位落在 MIT(58) / Apache-2.0(35)
+    // **逐项过了一遍**（§3.4 的硬要求）：那 102 项的许可档位落在 MIT(58) / Apache-2.0(35)
     // / ISC(6) / CC-BY-4.0(1) / BSD-3-Clause(1) / 0BSD(1)，全部命中 policy.allowed 六项白名单
     // （CC-BY-4.0 走既有的 caniuse-lite 精确版本裁定），因此
     // **待架构师裁定 0 项、禁止 0 项、无法解析 0 项**，没有往 allowed 里塞任何新条目，
     // 也没有新增 adjudications。下面按「谁把它带进来的」分块，每块头一行写明来源，
     // 这样将来删掉某个冻结条目时能一眼看出该连带删掉哪一段。
+    //
+    // ZLQ-202（D0 修正单，落地 ZLQ-201 裁定二）让它从 102 行变成 106 行：ZLQ-153 §8.3 要求
+    // 作品契约扫描器以 AST 为最终判定、不以单条正则定案，于是 packages/work-contract 冻结
+    // parse5 / postcss / acorn 三个解析器。**同样逐项过了一遍**：106 项落在 MIT(61)
+    // / Apache-2.0(35) / ISC(6) / BSD-2-Clause(1) / CC-BY-4.0(1) / BSD-3-Clause(1) / 0BSD(1)，
+    // 相对 102 行时期只多了 MIT +3（acorn@8.19.0、parse5@8.0.1、postcss@8.5.30）与
+    // BSD-2-Clause +1（entities@8.1.0，parse5 声明 ^8.0.0 后实际解析到的版本）。
+    // BSD-2-Clause 是**首次**进入生产闭包，但它本来就在 policy.allowed 的六项白名单里、
+    // 不落在 reviewRequired，所以依旧是「不往 allowed 塞新条目、不新增 adjudications、
+    // 待裁定 0 / 禁止 0 / 无法解析 0」。
+    // 另注意 acorn@8.19.0 与 postcss@8.5.30 在 baseline 上就已在 lockfile 里（别的 importer 的
+    // devDependency），本单只是让它们**多了一个生产消费者**：所以生产侧 +4 而闭包总量只 +2
+    // （318 → 320），仅构建/测试期一侧相应从 216 降到 214。
     const prod = result.entries
       .filter((item) => item.kind === 'prod')
       .map((item) => `${item.name}@${item.version}`)
@@ -366,7 +379,7 @@ describe('真实 lockfile 闭包的审计结论', () => {
         // API 契约层的运行时分发面
         'zod@4.6.7',
         'zod-openapi@6.0.2',
-        // ── 以下 74 项全部由 ZLQ-195 §3.4 的依赖冻结带入 ──────────────────────
+        // ── 接下来 74 项全部由 ZLQ-195 §3.4 的依赖冻结带入 ──────────────────────
         // 冻结条目 session-cookie（apps/api）与 server-only-guard（apps/api + apps/web）：
         // 设计 §3.2 步骤 2 的 HttpOnly; Secure; SameSite=Lax 会话 Cookie，
         // 与 §4.3「apps/api 暴露一个 server-only 受控入口」的编译期守卫。均 MIT。
@@ -464,6 +477,23 @@ describe('真实 lockfile 闭包的审计结论', () => {
         'mimic-fn@2.1.0',
         'merge-stream@2.0.0',
         'is-stream@2.0.1',
+        // ── 最后 4 项由 ZLQ-202（D0 修正单，落地 ZLQ-201 裁定二）带入 ──────────────
+        // ZLQ-153 §8.3 要求作品契约扫描器以 AST 为最终判定，于是 packages/work-contract
+        // 冻结三个解析器：parse5（HTML）、postcss（CSS）、acorn（JavaScript）。
+        // entities@8.1.0 是这条链上唯一的传递依赖 —— parse5@8.0.1 声明 `entities: ^8.0.0`，
+        // 实际解析到 8.1.0（不是 8.0.0，按 lockfile 实测记录）。
+        // 三项解析器均 MIT、entities 为 BSD-2-Clause，全在 policy.allowed 白名单内且都不落在
+        // reviewRequired，因此没有新增 adjudications。
+        // acorn@8.19.0 与 postcss@8.5.30 在 baseline 上已在闭包里，只是当时都只经 dev 链进来
+        // （acorn 来自 eslint 的 acorn-jsx / espree，postcss@8.5.30 来自 vite），本单让它们多了
+        // 一个生产消费者，于是分类从 dev 转 prod —— 这也是「生产 +4 而总量只 +2」的来源。
+        // 上面 next 构建闭包里的 postcss@8.5.23 是 next@16.4.2 自己钉的版本，与这里的
+        // postcss@8.5.30 并存不是本单造成的；刻意没有加 overrides 合并，理由与上面 zod
+        // 双版本那段相同（合并后无法用测试证明既有行为未变）。
+        'acorn@8.19.0',
+        'entities@8.1.0',
+        'parse5@8.0.1',
+        'postcss@8.5.30',
       ].sort(),
     );
 
