@@ -552,12 +552,14 @@ export function measureCorpus(
 
   // ---- 切分不泄漏（§2.2）-------------------------------------------------
   const splitOfFamily = new Map<string, Split>();
-  const familyLeakage: string[] = [];
+  const leakedFamilies = new Set<string>();
   for (const row of cases) {
     const seen = splitOfFamily.get(row.spec.familyId);
     if (seen === undefined) splitOfFamily.set(row.spec.familyId, row.spec.split);
-    else if (seen !== row.spec.split) familyLeakage.push(row.spec.familyId);
+    else if (seen !== row.spec.split) leakedFamilies.add(row.spec.familyId);
   }
+  // 计数单位是**家族**而不是越界样例句：一个家族有 k 件落在另一侧，也只算一个家族。
+  const familyLeakage = [...leakedFamilies].sort();
 
   // ---- 误拦（§2.6）-------------------------------------------------------
   const blockedSafe = safeRows.filter((row) => row.outcome.ok && row.outcome.status === 'BLOCK');
@@ -1097,7 +1099,7 @@ export function measureCorpus(
     shards,
     shardBudget,
     splits: {
-      familyLeakage: [...new Set(familyLeakage)].sort(),
+      familyLeakage,
       leakFree: familyLeakage.length === 0,
     },
     extraGates,
