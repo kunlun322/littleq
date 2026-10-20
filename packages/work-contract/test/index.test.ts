@@ -6,7 +6,7 @@ describe('@littleq/work-contract 骨架', () => {
   it('暴露与 package.json 一致的单元标识', () => {
     expect(UNIT_ID).toBe('@littleq/work-contract');
     expect(unitManifest.layer).toBe('contract');
-    expect(unitManifest.skeletonOnly).toBe(true);
+    expect(unitManifest.skeletonOnly).toBe(false);
   });
 
   it('zod 在 workspace 中可解析：占位 schema 接受契约版本 0', () => {
