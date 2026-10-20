@@ -103,6 +103,7 @@ export const PII_PATTERNS: readonly LexiconEntry[] = [
 ];
 
 /** 双向控制字符与 NUL（§1.2 明文拒绝）。零宽与 BOM 另见 `normalize.ts`。 */
+// eslint-disable-next-line no-control-regex -- \u0000 是**检测目标**（§1.2 明文拒绝 NUL），不是转义失误
 export const BIDI_OR_NUL_PATTERN = /[\u0000\u200e\u200f\u202a-\u202e\u2066-\u2069]/;
 
 // ---------------------------------------------------------------------------

@@ -95,10 +95,40 @@ export function nfc(text: string): string {
 // 不可见字符与双向控制字符
 // ---------------------------------------------------------------------------
 
-/** ZLQ-156 §1.2：拒绝 NUL/控制字符、双向控制字符。 */
-const CONTROL_OR_BIDI =
-  // eslint-disable-next-line no-control-regex
-  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u00ad\u034f\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/;
+/**
+ * 不可见格式字符的字符类**源码**：零宽、双向控制、软连字符、BOM。
+ *
+ * 存成源码再由 `new RegExp` 组装，而不是三处各写一个字面量，动机是 `g` 标志的语义，
+ * 与下面那处 lint 例外无关（那三行的误报在那里另有说明）：
+ * `stripInvisible` 需要 `g`（`.replace` 要全量替换），而 `containsControlOrBidi` 与
+ * `looksEncoded` 需要**非** `g` —— 带 `g` 的正则 `.test()` 有 `lastIndex` 状态，对同一批
+ * 文本连续调用会隔次漏判。三处集合只要漂移一处，插一个零宽空格就能绕过整条规则链。
+ */
+const INVISIBLE_CLASS = [
+  '\\u00ad', // 软连字符
+  '\\u034f', // 组合用连接符
+  '\\u061c', // 阿拉伯字母标记
+  '\\u180e', // 蒙古元音分隔符
+  '\\u200b-\\u200f', // 零宽空格 / 不连接 / 连接 / 左右标记
+  '\\u202a-\\u202e', // 双向嵌入与覆盖
+  '\\u2060-\\u2064', // 词连接符与不可见运算符
+  '\\u2066-\\u2069', // 双向隔离
+  '\\ufeff', // BOM / 零宽不换行空格
+].join('');
+
+/** C0 控制字符（放行 HT/LF/CR）与 DEL。ZLQ-156 §1.2 明文「拒绝 NUL/控制字符」。 */
+const CONTROL_CLASS = '\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f';
+
+// `no-misleading-character-class` 在下面三行是误报，所以显式说明，而不是想办法让它看不见：
+// 该规则警告「组合字符跟在基字符后面，在字符类里不会按读者预期组合」，而 U+034F
+// （COMBINING GRAPHEME JOINER）恰恰是 §1.2 要求逐个检出并剥掉的目标码点 —— 我们要的
+// 就是它独立命中，不是它跟谁组合。规则只检查字面量及其常量折叠结果，表达不了这个意图，
+// 因此只在这三行关掉，文件其余部分它仍然全程生效。
+/* eslint-disable no-misleading-character-class */
+const INVISIBLE = new RegExp(`[${INVISIBLE_CLASS}]`);
+const INVISIBLE_GLOBAL = new RegExp(`[${INVISIBLE_CLASS}]`, 'g');
+const CONTROL_OR_BIDI = new RegExp(`[${CONTROL_CLASS}${INVISIBLE_CLASS}]`);
+/* eslint-enable no-misleading-character-class */
 
 export function containsControlOrBidi(text: string): boolean {
   return CONTROL_OR_BIDI.test(text);
@@ -109,10 +139,7 @@ export function containsControlOrBidi(text: string): boolean {
  * 否则插一个零宽空格就能绕过整条规则链。
  */
 export function stripInvisible(text: string): string {
-  return text.replace(
-    /[\u00ad\u034f\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g,
-    '',
-  );
+  return text.replace(INVISIBLE_GLOBAL, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -395,13 +422,7 @@ export function looksEncoded(text: string): boolean {
   if (text.length === 0) return false;
   if (text.includes('&') || text.includes('%')) return true;
   if (/[=;]\s*base64/i.test(text)) return true;
-  // eslint-disable-next-line no-control-regex
-  if (
-    /[\u00ad\u034f\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/.test(
-      text,
-    )
-  )
-    return true;
+  if (INVISIBLE.test(text)) return true;
   if (text !== text.normalize('NFKC')) return true;
   for (const char of text) if (char in CONFUSABLES) return true;
   return BASE64_PATTERN.test(text.replace(/\s+/g, ''));

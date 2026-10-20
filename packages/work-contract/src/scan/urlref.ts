@@ -59,6 +59,7 @@ const SCHEME_PATTERN = /^([a-z][a-z0-9+.-]*):/i;
  * HTML 标准在解析 URL 时会剥掉 C0 控制字符与空格；这里同样剥掉，**在**分类之前。
  */
 function stripUrlSeparators(text: string): string {
+  // eslint-disable-next-line no-control-regex -- HTML 的 URL 解析同样先剥掉 C0 与空格，这里是照做
   return text.replace(/[\u0000-\u0020\u007f]/g, '');
 }
 
