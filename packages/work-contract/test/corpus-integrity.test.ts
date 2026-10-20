@@ -1371,6 +1371,14 @@ describe('§2.5 语料版本、准入声明与缺口表', () => {
     }
     // 语料暴露出的那个扫描器真缺陷必须是被声明的，不是被吸收的。
     expect(ids).toContain('scanner-defect-b5-form-action');
+    // 缺口散文里引用的数字必须与指纹的实测值同源：这条是自查出来的缺陷留下的守卫
+    // —— `exif-constants-not-in-fingerprint` 曾把「51 张词库表」写成 53，
+    // 而同一份交付里的 `lexiconTableCount` 断言钉的是 51，两处对不上却都是绿的。
+    const exifGap = DECLARED_GAPS.find((gap) => gap.id === 'exif-constants-not-in-fingerprint');
+    expect(exifGap).toBeDefined();
+    expect(exifGap?.statement).toContain(
+      `${rulesetFingerprint(POLICY).lexiconTableCount} 张词库表`,
+    );
   });
 
   it('报告的总判定是「不达标」，且失败项点名的正是 B5 的假阴性', () => {

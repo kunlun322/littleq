@@ -36,7 +36,7 @@
 {"metric":"execution.failed_cases","value":"0","target":"0（超时/解析失败/预算耗尽都算失败）","pass":true,"spec":"ZLQ-156 §2.6 / §8.6"}
 {"metric":"subtype_coverage","value":"68/91","target":"规格未给下限；未测槽位逐条列出","pass":null,"spec":"ZLQ-156 §2.4"}
 {"metric":"split.family_leakage","value":"0","target":"0（dev/holdout 按家族切分）","pass":true,"spec":"ZLQ-156 §2.2 / §2.5"}
-{"metric":"shard.slowest_local_ms","value":"143","target":"热 ≤180000 / 冷 ≤300000（**CI 口径未实测**）","pass":true,"spec":"ZLQ-156 §2.6"}
+{"metric":"shard.slowest_local_ms","value":"154","target":"热 ≤180000 / 冷 ≤300000（**CI 口径未实测**）","pass":true,"spec":"ZLQ-156 §2.6"}
 {"metric":"corpus.total_cases","value":"1026","target":"设计 600 安全 + 780 违规（§2.1 首版目标）","pass":null,"spec":"ZLQ-156 §2.1 / §2.2"}
 {"metric":"corpus.safe_cases","value":"240","target":"设计 600","pass":null,"spec":"ZLQ-156 §2.2"}
 {"metric":"corpus.violation_cases","value":"780","target":"设计 780","pass":true,"spec":"ZLQ-156 §2.4"}

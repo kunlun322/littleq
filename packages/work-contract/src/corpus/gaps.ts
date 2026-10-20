@@ -107,7 +107,7 @@ export const DECLARED_GAPS: readonly DeclaredGap[] = [
     spec: 'ZLQ-156 §2.5 / §2.6（判定缓存失效）',
     severity: 'declared-limit',
     statement:
-      '规则集指纹覆盖 53 张词库表 + 策略字段 + 5 个可读性阈值，但 `src/scan/exif.ts` 里 B13 用的 ' +
+      '规则集指纹覆盖 51 张词库表 + 策略字段 + 5 个可读性阈值，但 `src/scan/exif.ts` 里 B13 用的 ' +
       'EXIF GPS tag 常量是**模块私有、未导出**的，因此不在指纹内：改它们不会让 `rulesetVersion` 变化，' +
       '也就不会让判定缓存 key 变化。这是 §2.6「配置/词库变化必须改变 ruleset hash」的一个真实缺口。',
     fillBy:
