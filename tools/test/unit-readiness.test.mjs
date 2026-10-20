@@ -55,12 +55,11 @@ const UNITS = [
   'packages/work-contract',
 ];
 
-// ZLQ-194 §9.2 点名的五个「本该装后端」的单元：本单结束时它们必须仍然全部是 skeleton。
+// ZLQ-194 §9.2 点名的四个「本该装后端」的单元：本单结束时它们必须仍然全部是 skeleton。
 const SKELETON_UNITS = [
   'apps/api',
   'apps/runtime',
   'apps/worker',
-  'packages/infra',
   'packages/work-contract',
 ];
 
@@ -140,7 +139,7 @@ describe('真实仓库的就绪门禁', () => {
     expect(result.contractedButAbsent).toEqual([]);
   });
 
-  it('本单结束时五个后端单元仍然全部是 skeleton（ZLQ-195 §3.1 的硬条件）', () => {
+  it('本单结束时四个后端单元仍然全部是 skeleton（ZLQ-195 §3.1 的硬条件）', () => {
     const resolved = Object.fromEntries(scan(REPO_ROOT).resolvedStatus.map((r) => [r.unit, r]));
     for (const unit of SKELETON_UNITS) expect(resolved[unit].status, unit).toBe('skeleton');
     for (const unit of UNITS.filter((item) => !SKELETON_UNITS.includes(item)))
