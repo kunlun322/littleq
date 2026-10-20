@@ -56,12 +56,7 @@ const UNITS = [
 ];
 
 // ZLQ-194 §9.2 点名的四个「本该装后端」的单元：本单结束时它们必须仍然全部是 skeleton。
-const SKELETON_UNITS = [
-  'apps/api',
-  'apps/runtime',
-  'apps/worker',
-  'packages/work-contract',
-];
+const SKELETON_UNITS = ['apps/api', 'apps/runtime', 'apps/worker', 'packages/work-contract'];
 
 const contract = JSON.parse(readFileSync(CONTRACT, 'utf8'));
 
