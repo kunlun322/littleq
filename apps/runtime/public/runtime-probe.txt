@@ -1,0 +1,3 @@
+lq-runtime-probe static asset
+served from apps/runtime/public (project rootDirectory), not from a function
+marker: lq-runtime-asset-ok
