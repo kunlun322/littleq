@@ -129,7 +129,9 @@ export class PostgresTaskPumpStore implements TaskPumpStore {
   async recordReceipt(input: RecordReceiptInput): Promise<void> {
     await this.#execute(async (tx) => {
       const record = await lockPrivateState(tx, input.taskId);
-      const entry = record.operationJournal.find((item) => item.operationKey === input.operationKey);
+      const entry = record.operationJournal.find(
+        (item) => item.operationKey === input.operationKey,
+      );
 
       // 端口原文把四种拒绝并列（异回执、journal 里没有这个 key、intent 仍是 INTENDED、
       // 以及"确认相同 requestHash"失败），并且只给了一个对外形态：`REVISION_CONFLICT`。

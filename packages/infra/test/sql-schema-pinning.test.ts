@@ -82,9 +82,10 @@ function ddlColumns(table: string): readonly string[] {
   const names: string[] = [];
   for (const rawLine of body.slice(0, end).split('\n')) {
     const line = rawLine.trim();
-    const match = /^([a-z_][a-z0-9_]*)\s+(?:uuid|text|varchar|bigint|integer|boolean|jsonb|bytea|timestamptz)\b/.exec(
-      line,
-    );
+    const match =
+      /^([a-z_][a-z0-9_]*)\s+(?:uuid|text|varchar|bigint|integer|boolean|jsonb|bytea|timestamptz)\b/.exec(
+        line,
+      );
     if (match?.[1] !== undefined) names.push(match[1]);
   }
   return names;

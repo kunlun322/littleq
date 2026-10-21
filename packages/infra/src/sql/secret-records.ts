@@ -1,4 +1,9 @@
-import { type SecretKind, type SecretRecord, type SecretRef, createSecretRecord } from '@littleq/domain';
+import {
+  type SecretKind,
+  type SecretRecord,
+  type SecretRef,
+  createSecretRecord,
+} from '@littleq/domain';
 
 import { infraError } from '../errors.js';
 import type { DatabaseAdapter, DatabaseTransaction } from '../ports/database-adapter.js';
@@ -137,10 +142,7 @@ export function storedSecretFromRow(row: OwnerSecretRow): StoredSecret {
  * 共用是为了让"写进去的"与"CAS 比较的"是同一套编码：两份参数列表迟早会在某一列上分叉
  * （典型是忘了给 `key_version` 传值），而分叉的表现是 CHECK 冲突或一列静默为 NULL。
  */
-export function ownerSecretParams(
-  ownerId: string,
-  stored: StoredSecret,
-): readonly unknown[] {
+export function ownerSecretParams(ownerId: string, stored: StoredSecret): readonly unknown[] {
   const { record, secret } = stored;
   return [
     ownerId,

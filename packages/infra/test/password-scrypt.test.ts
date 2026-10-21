@@ -176,8 +176,16 @@ describe('hashPassword / verifyPassword 往返', () => {
     const record = await hashPassword(password);
     const salt = randomBytes(PASSWORD_SALT_BYTES);
     const [a, b] = await Promise.all([
-      independentDerive(password, new Uint8Array(salt), 64, { n: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P }),
-      independentDerive(password, new Uint8Array(salt), 64, { n: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P }),
+      independentDerive(password, new Uint8Array(salt), 64, {
+        n: SCRYPT_N,
+        r: SCRYPT_R,
+        p: SCRYPT_P,
+      }),
+      independentDerive(password, new Uint8Array(salt), 64, {
+        n: SCRYPT_N,
+        r: SCRYPT_R,
+        p: SCRYPT_P,
+      }),
     ]);
     expect(timingSafeEqual(a, b)).toBe(true);
     expect(timingSafeEqual(a, record.passwordHash)).toBe(false);

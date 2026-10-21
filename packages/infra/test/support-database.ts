@@ -59,10 +59,7 @@ import { PostgresDatabaseAdapter } from '../src/sql/postgres-adapter.js';
 import { USER_INSERT_SQL, userInsertParams } from '../src/sql/account-rows.js';
 import { PROJECT_INSERT_SQL, projectInsertParams } from '../src/sql/project-rows.js';
 import { AI_TASK_INSERT_SQL, taskInsertParams } from '../src/sql/task-rows.js';
-import {
-  TASK_PRIVATE_INSERT_SQL,
-  taskPrivateParams,
-} from '../src/sql/task-private-rows.js';
+import { TASK_PRIVATE_INSERT_SQL, taskPrivateParams } from '../src/sql/task-private-rows.js';
 import { newUuidV7 } from '../src/sql/uuidv7.js';
 import { createPgClientSource, type SqlClientSourceOptions } from '../src/sql/sources.js';
 import type { SqlClientSource } from '../src/sql/client.js';
@@ -224,9 +221,7 @@ export type SecondaryAdapter = {
  * 调用排到同一条连接上，`FOR UPDATE SKIP LOCKED` 根本没有两个后端可裁决。只有两个独立池
  * 上的两条连接同时进入 `SELECT … FOR UPDATE SKIP LOCKED`，仲裁者才真的是数据库。
  */
-export async function secondaryAdapter(
-  harness: TestDatabaseHarness,
-): Promise<SecondaryAdapter> {
+export async function secondaryAdapter(harness: TestDatabaseHarness): Promise<SecondaryAdapter> {
   const source = await createPgClientSource({
     connectionString: harness.connectionString,
     maxConnections: 4,
@@ -344,8 +339,7 @@ export async function seedTask(
   harness: TestDatabaseHarness,
   options: SeedTaskOptions = {},
 ): Promise<AiTask> {
-  const accounts =
-    options.requestedBy === undefined ? await seedAccounts(harness) : undefined;
+  const accounts = options.requestedBy === undefined ? await seedAccounts(harness) : undefined;
   const studentId = options.requestedBy ?? accounts?.studentId;
   if (studentId === undefined) throw new Error('seedTask: 需要 requestedBy 或自建账号');
   const projectId = options.projectId ?? (await seedProject(harness, studentId));
@@ -411,4 +405,3 @@ export async function seedPrivateState(
   });
   return record;
 }
-

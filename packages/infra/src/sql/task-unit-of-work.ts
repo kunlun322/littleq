@@ -188,10 +188,7 @@ export class PostgresTaskUnitOfWork implements TaskUnitOfWork {
 /** 事务内**最后一次实际返回**的 task revision（§3.5）。可变是刻意的：它是累加器。 */
 type LatestRevision = { revision: Revision };
 
-function bindTransactionHandles(
-  tx: DatabaseTransaction,
-  latest: LatestRevision,
-): TaskTransaction {
+function bindTransactionHandles(tx: DatabaseTransaction, latest: LatestRevision): TaskTransaction {
   return {
     tasks: bindTasks(tx, latest),
     projects: bindProjects(tx),
@@ -313,10 +310,7 @@ function bindPrivateState(tx: DatabaseTransaction): TaskTransactionPrivateState 
  * 结果重新过一遍 `createTaskPrivateRecord`：它会在 `operationKey` 重复时抛错。合并逻辑
  * 若把同一 key 追加了两遍，那是一次静默的数据损坏，构造器让它当场炸。
  */
-function mergeJournal(
-  stored: TaskPrivateRecord,
-  incoming: TaskPrivateRecord,
-): TaskPrivateRecord {
+function mergeJournal(stored: TaskPrivateRecord, incoming: TaskPrivateRecord): TaskPrivateRecord {
   const byKey = new Map<string, OperationJournalEntry>(
     incoming.operationJournal.map((entry) => [String(entry.operationKey), entry]),
   );
@@ -408,11 +402,7 @@ async function dbClock(tx: DatabaseTransaction): Promise<Timestamp> {
  * 重新读一遍再来。分开报会在 401/403/409 之间制造一个可被枚举的差异，而 §4.1 要求
  * 别人的 task 一律 404、不含对象细节。
  */
-function assertLeaseHeld(
-  locked: LockedTask,
-  lease: TaskRunInput['lease'],
-  now: Timestamp,
-): void {
+function assertLeaseHeld(locked: LockedTask, lease: TaskRunInput['lease'], now: Timestamp): void {
   const held = locked.lease;
   if (held === null || held.leaseToken !== lease.leaseToken) {
     throw revisionConflict('TaskLease.leaseToken');

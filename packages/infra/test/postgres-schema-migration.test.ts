@@ -116,9 +116,7 @@ async function insertStudent(h: TestDatabaseHarness): Promise<string> {
 
 async function insertProject(h: TestDatabaseHarness, studentId: string): Promise<string> {
   const id = newUuidV7();
-  await h.adapter.transaction((tx) =>
-    tx.execute(PROJECT_INSERT_SQL, [id, studentId, EPOCH, {}]),
-  );
+  await h.adapter.transaction((tx) => tx.execute(PROJECT_INSERT_SQL, [id, studentId, EPOCH, {}]));
   return id;
 }
 
@@ -274,10 +272,9 @@ describe.skipIf(harness === null)('§3.2 schema 在真库里的形状', () => {
     // 正对照：Layer A 的文本扫描实测到 16 个，扫到 0 个说明 LIKE 的转义写坏了。
     expect(rows.length).toBeGreaterThanOrEqual(16);
     for (const row of rows) {
-      expect(
-        row.data_type,
-        `${row.table_name}.${row.column_name} 必须是 timestamptz`,
-      ).toBe('timestamp with time zone');
+      expect(row.data_type, `${row.table_name}.${row.column_name} 必须是 timestamptz`).toBe(
+        'timestamp with time zone',
+      );
     }
   });
 
@@ -452,11 +449,9 @@ describe.skipIf(harness === null)('§3.2 约束在真库里真的会拒', () => 
       }),
     );
     expect(error).toBeInstanceOf(Error);
-    const rows = await queryHarness<{ id: string }>(
-      h,
-      `SELECT id FROM projects WHERE id = $1`,
-      [projectId],
-    );
+    const rows = await queryHarness<{ id: string }>(h, `SELECT id FROM projects WHERE id = $1`, [
+      projectId,
+    ]);
     expect(rows).toHaveLength(0);
   });
 

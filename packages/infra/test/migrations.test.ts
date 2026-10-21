@@ -85,9 +85,7 @@ describe('§3.2 表清单', () => {
       /CREATE TABLE(?: IF NOT EXISTS)? schema_migrations/.test(s),
     );
     expect(inMigration).toHaveLength(0);
-    expect(SCHEMA_MIGRATIONS_BOOTSTRAP_DDL).toMatch(
-      /CREATE TABLE IF NOT EXISTS schema_migrations/,
-    );
+    expect(SCHEMA_MIGRATIONS_BOOTSTRAP_DDL).toMatch(/CREATE TABLE IF NOT EXISTS schema_migrations/);
   });
 
   it('建表次序满足 FK 依赖：users 先于其引用者，ai_tasks 先于 versions', () => {
@@ -116,8 +114,8 @@ describe('§3.2 表清单', () => {
 describe('§3.2 列级约束', () => {
   it('users / projects / ai_tasks 的 revision 是 bigint NOT NULL CHECK (revision > 0)', () => {
     for (const table of ['users', 'projects', 'ai_tasks']) {
-      const ddl = MIGRATION_STATEMENTS.find(
-        (s) => new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\(`).test(s),
+      const ddl = MIGRATION_STATEMENTS.find((s) =>
+        new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\(`).test(s),
       );
       expect(ddl, table).toBeDefined();
       expect(ddl ?? '').toMatch(/revision\s+bigint\s+NOT NULL CHECK \(revision > 0\)/);
@@ -289,9 +287,7 @@ describe('INSERT 语句的列数与占位符一致', () => {
           .split(',')
           .map((c) => c.trim())
           .filter((c) => c.length > 0);
-        const placeholders = [...(insert[3] ?? '').matchAll(/\$(\d+)/g)].map((m) =>
-          Number(m[1]),
-        );
+        const placeholders = [...(insert[3] ?? '').matchAll(/\$(\d+)/g)].map((m) => Number(m[1]));
         found.push({
           file,
           name,

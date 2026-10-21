@@ -244,10 +244,10 @@ export class PostgresGrantRecordStore implements GrantRecordStore {
   async addCommittedBytes(grantId: string, delta: number): Promise<number> {
     if (!Number.isSafeInteger(delta)) throw infraError('OBJECT_READ_BUDGET_EXCEEDED');
     const rows = await this.#execute((tx) =>
-      tx.query<{ readonly committed_bytes: unknown }>(
-        OBJECT_READ_GRANT_ADD_COMMITTED_BYTES_SQL,
-        [grantId, delta],
-      ),
+      tx.query<{ readonly committed_bytes: unknown }>(OBJECT_READ_GRANT_ADD_COMMITTED_BYTES_SQL, [
+        grantId,
+        delta,
+      ]),
     );
     const row = rows[0];
     /** 0 行＝这张 grant 不在库里。端口的内存版在这里抛 `OBJECT_READ_GRANT_UNKNOWN`，照抄。 */
@@ -264,10 +264,10 @@ export class PostgresGrantRecordStore implements GrantRecordStore {
   async countActiveLeases(grantId: string, now: Timestamp): Promise<number> {
     return this.#execute(async (tx) => {
       await tx.execute(GRANT_READ_LEASES_DELETE_EXPIRED_SQL, [toTimestamptz(now)]);
-      const rows = await tx.query<{ readonly active: unknown }>(GRANT_READ_LEASES_ACTIVE_COUNT_SQL, [
-        grantId,
-        toTimestamptz(now),
-      ]);
+      const rows = await tx.query<{ readonly active: unknown }>(
+        GRANT_READ_LEASES_ACTIVE_COUNT_SQL,
+        [grantId, toTimestamptz(now)],
+      );
       const row = rows[0];
       if (row === undefined) throw infraError('STORED_ROW_INCONSISTENT');
       return fromBigintColumn(row.active);

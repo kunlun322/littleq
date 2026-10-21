@@ -281,7 +281,10 @@ export async function casTaskEntity(
   task: AiTask,
   expectedRevision: string,
 ): Promise<void> {
-  const written = await tx.execute(AI_TASK_ENTITY_CAS_SQL, taskEntityCasParams(task, expectedRevision));
+  const written = await tx.execute(
+    AI_TASK_ENTITY_CAS_SQL,
+    taskEntityCasParams(task, expectedRevision),
+  );
   if (written !== 1) throw infraError('STORED_ROW_INCONSISTENT');
 }
 
@@ -378,7 +381,10 @@ export interface LockedTask {
  * 返回 `null` **只**表示行不存在；能不能领取、能不能接管、该不该 coalesce 一律留给
  * domain 谓词与 `TASK_ACQUIRE_DECISION_ORDER`，这里一条都不判。
  */
-export async function lockTask(tx: DatabaseTransaction, taskId: TaskId): Promise<LockedTask | null> {
+export async function lockTask(
+  tx: DatabaseTransaction,
+  taskId: TaskId,
+): Promise<LockedTask | null> {
   const rows = await tx.query<AiTaskRow>(AI_TASK_SELECT_BY_ID_FOR_UPDATE_SQL, [taskId]);
   const [row] = rows;
   if (row === undefined) return null;

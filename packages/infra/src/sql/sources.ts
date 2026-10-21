@@ -48,10 +48,7 @@ export async function createPgClientSource(
     async connect(): Promise<SqlClient> {
       const client = await pool.connect();
       return {
-        async query<TRow>(
-          text: string,
-          values: readonly unknown[],
-        ): Promise<SqlQueryResult<TRow>> {
+        async query<TRow>(text: string, values: readonly unknown[]): Promise<SqlQueryResult<TRow>> {
           const result = await client.query(text, [...values]);
           const rows = result.rows as readonly TRow[];
           return { rows, rowCount: result.rowCount ?? rows.length };
@@ -87,10 +84,7 @@ export async function createNeonClientSource(
     async connect(): Promise<SqlClient> {
       const client = await pool.connect();
       return {
-        async query<TRow>(
-          text: string,
-          values: readonly unknown[],
-        ): Promise<SqlQueryResult<TRow>> {
+        async query<TRow>(text: string, values: readonly unknown[]): Promise<SqlQueryResult<TRow>> {
           const result = await client.query(text, [...values]);
           const rows = result.rows as readonly TRow[];
           return { rows, rowCount: result.rowCount ?? rows.length };
