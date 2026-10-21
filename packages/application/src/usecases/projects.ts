@@ -43,13 +43,23 @@ export interface ProjectServices {
 }
 
 /**
+ * 归属守卫真正需要的东西：**只有目录**。
+ *
+ * 两个 `loadOwned*` 的入参类型是这个 `Pick` 而不是整个 `ProjectServices`，这样别的用例
+ * （`preview.ts` 就只有 `projects` + `preview`）能直接复用同一道守卫，而不必为了调用它
+ * 去伪造一个自己根本用不到的 `tasks` / `random`。收窄入参对既有调用方是纯放宽，
+ * 传完整 `ProjectServices` 的地方一个字都不用改。
+ */
+export type OwnershipDirectory = Pick<ProjectServices, 'projects'>;
+
+/**
  * 按 id 取项目并断言归属。
  *
  * 导出给 turn / preview 用例复用：它们的入参里都只有 `projectId`，而"这个项目是谁的"
  * 必须从 DB 读，不能从请求体拿（§4.2：「所有 API 都从服务器会话判断，不信任客户端声明」）。
  */
 export async function loadOwnedProject(
-  services: ProjectServices,
+  services: OwnershipDirectory,
   input: { readonly actor: Actor; readonly projectId: ProjectId },
 ): Promise<Project> {
   const studentId = studentActorId(input.actor);
@@ -59,9 +69,16 @@ export async function loadOwnedProject(
   return project;
 }
 
-/** 同理：取版本并断言它属于这个学生的项目。 */
+/**
+ * 同理：取版本并断言它属于这个学生的项目。
+ *
+ * ⚠️ 它证明的是"版本属于**这个学生**的某个项目"—— 项目是从 `version.projectId` 反查出来的。
+ * 所以它**不**证明这个版本属于路径里那个 `{id}`：学生拿自己 A 项目的 versionId 去请求
+ * B 项目，这里会通过。调用方若同时握着路径上的 `projectId`，必须自己再比一次
+ * （`preview.ts` 与 `turns.ts` 的 `loadTurnBaseVersion` 都这么做）。
+ */
 export async function loadOwnedVersion(
-  services: ProjectServices,
+  services: OwnershipDirectory,
   input: { readonly actor: Actor; readonly versionId: ProjectVersionId },
 ): Promise<{ readonly project: Project; readonly version: ProjectVersion }> {
   const version = await services.projects.findVersionById(input.versionId);
