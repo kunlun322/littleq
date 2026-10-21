@@ -154,6 +154,20 @@ async function captureRefusal(run: () => Promise<unknown>): Promise<string> {
   return error.reason;
 }
 
+/**
+ * A9/A10 的扫描形状。
+ *
+ * 刻意容忍空白与尾逗号，因为源码扫描型守卫与格式化器天然冲突：`printWidth: 100` 一旦装不下，
+ * prettier 就会把 `new BootstrapRefused('PASSWORD_TOO_MANY_ATTEMPTS')` 拆成三行，而一个用
+ * `includes` 写的守卫会因此**假红** —— 那是「不是缺陷的红」，最难排查的一类。
+ *
+ * 理由名全部落在 `[A-Z_]` 内（见 `BOOTSTRAP_REFUSAL_REASONS` 的字面量类型），所以直接插值
+ * 进正则不需要转义；若以后允许别的字符，这里必须先转义。
+ */
+function throwPattern(reason: string): RegExp {
+  return new RegExp(`new\\s+BootstrapRefused\\(\\s*'${reason}'\\s*,?\\s*\\)`);
+}
+
 const REQUIRED_FLAGS = [
   '--owner-login',
   'owner',
@@ -268,7 +282,7 @@ describe('A 组 · CLI 层的结构性拒绝（不需要数据库）', () => {
       ),
     );
     for (const reason of BOOTSTRAP_REFUSAL_REASONS) {
-      const thrown = source.includes(`new BootstrapRefused('${reason}')`);
+      const thrown = throwPattern(reason).test(source);
       // 失败方向是安全的：以后新增一个理由却不抛它，这里立刻红。
       expect(thrown, `声明了 ${reason} 但源码里没有任何一处抛出它`).toBe(true);
     }
@@ -281,11 +295,20 @@ describe('A 组 · CLI 层的结构性拒绝（不需要数据库）', () => {
         'utf8',
       ),
     );
-    expect(source.includes("new BootstrapRefused('SUCH_REASON_DOES_NOT_EXIST')")).toBe(false);
-    // 再证一次扫描器不是恒真：真实的三个理由各自的命中数都恰好是 1 或更多，而编造的是 0。
+    expect(throwPattern('SUCH_REASON_DOES_NOT_EXIST').test(source)).toBe(false);
+    // 再证一次扫描器不是恒真：每个真实理由都命中，而编造的那个命中数为 0。
     for (const reason of BOOTSTRAP_REFUSAL_REASONS) {
-      expect(source.includes(`new BootstrapRefused('${reason}')`)).toBe(true);
+      expect(throwPattern(reason).test(source)).toBe(true);
     }
+    // 把「容忍拆行」从假设变成实测：prettier 拆出来的两种形状都必须命中，
+    // 否则上面的容忍只是写在了注释里。
+    expect(throwPattern('R').test("new BootstrapRefused('R')")).toBe(true);
+    expect(throwPattern('R').test("throw new BootstrapRefused(\n  'R',\n)")).toBe(true);
+    expect(throwPattern('R').test("new BootstrapRefused('RX')")).toBe(false);
+    // 划清分工：`throwPattern` **不**负责剥注释，那是 `stripComments` 的事（A9/A10 都先剥再扫）。
+    // 钉住这一点，是为了让「删掉 stripComments」这种看似无害的简化立刻暴露 —— 少了它，
+    // docstring 里提到某个理由名就会被当成「抛过」，一道真红会变成假绿。
+    expect(throwPattern('R').test("// new BootstrapRefused('R')")).toBe(true);
   });
 
   it('A11 · `BootstrapRefused` 的 message **就是** reason，且没有能携带原文的字段', () => {
