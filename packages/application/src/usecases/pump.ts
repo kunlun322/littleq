@@ -69,6 +69,7 @@ import {
   type TaskState,
   type Timestamp,
   type UsageLedgerEntry,
+  type UsageProvider,
   type UsageReservation,
   DomainError,
   capabilityOfTaskKind,
@@ -82,6 +83,7 @@ import {
   formatExternalOperationKey,
   isCancelRequested,
   nextTaskEventSequence,
+  parseVersionSequence,
   recordTaskStage,
   requestCancel,
   transitionTask,
@@ -317,6 +319,16 @@ export async function driveTaskUseCase(
   });
 
   if (acquired.kind === 'RESULT') {
+    // `CANCEL_FROM_QUEUED` 在 acquire 自己的事务里就把行写成 CANCELLED 并直接给结论，
+    // 于是 cancelSlice 根本不会被调用 —— 可额度是在受理那一刻 HELD 的。不在这里释放，
+    // 学生点完"停止"，那一格额度会一直被占到过期为止（任务从未外呼，本该立刻归还）。
+    if (
+      input.mode === 'CANCEL' &&
+      acquired.outcome === 'ADVANCED' &&
+      acquired.task.state === 'CANCELLED'
+    ) {
+      await releaseReservationQuietly(services, acquired.task, input.now);
+    }
     return { outcome: acquired.outcome, task: acquired.task };
   }
 
@@ -544,7 +556,7 @@ function sessionSlice(
     operation: 'CREATE_SESSION',
     subphase: 'AWAITING_SESSION_RECEIPT',
     requestHash: `create-session:${acquired.task.id}:${acquired.task.attempt}`,
-    async call({ externalKey, budgetMs, abortSignal }) {
+    async call({ externalKey, budgetMs, abortSignal, privateState }) {
       const handle = await services.provider.createSession({
         externalOperationKey: externalKey,
         budgetMs,
@@ -559,8 +571,13 @@ function sessionSlice(
           environmentId: handle.environmentId,
           templateVersion: handle.templateVersion ?? '',
         },
+        // 必须展开 `privateState`（事务 A 刚写下 `intent:'SENT'` 那一条 journal 的行），
+        // 不是 `acquired.privateState`（acquire 时读到的旧快照，没有那一条）。用旧的会让
+        // 事务 B 的 `withReceipt` 找不到同键条目 ⇒ 回执永远落不进去，而 infra 的
+        // `mergeJournal` 规则 1 又会把库里那条 `SENT` 原样保留 —— 任务照样推进，
+        // 只是 journal 永久停在 `SENT`/回执为空，§5.3「回执先持久化」形同虚设。
         next: {
-          ...acquired.privateState,
+          ...privateState,
           qcaSessionId: handle.sessionId,
           internalSubphase: parseInternalSubphase('AWAITING_MESSAGE_RECEIPT'),
         },
@@ -586,16 +603,16 @@ function messageSlice(
     operation: 'SEND_USER_MESSAGE',
     subphase: 'AWAITING_MESSAGE_RECEIPT',
     requestHash: `send-message:${acquired.task.id}:${acquired.task.attempt}`,
-    async call({ externalKey, budgetMs, abortSignal }) {
-      if (acquired.privateState.qcaSessionId === null) {
+    async call({ externalKey, budgetMs, abortSignal, privateState }) {
+      if (privateState.qcaSessionId === null) {
         // 子相位说"会话已建立"而 sessionId 为空 ⇒ 行自身不自洽。宁可停在这里，
         // 也不要凭一个空句柄去发消息（那会在 provider 侧建出第二个 Session）。
         throw new DomainError('INTERNAL_ERROR', 'TaskPrivateRecord.qcaSessionId');
       }
       // prompt 全文从对象存储读出来直接交出去，**不落 task_private、不进日志**。
-      const body = await services.inputs.get(acquired.privateState.inputRef.objectRef);
+      const body = await services.inputs.get(privateState.inputRef.objectRef);
       await services.provider.sendUserMessage({
-        session: sessionHandleOf(acquired.privateState, services),
+        session: sessionHandleOf(privateState, services),
         body,
         externalOperationKey: externalKey,
         budgetMs,
@@ -603,8 +620,9 @@ function messageSlice(
       });
       return {
         receipt: { messageAccepted: 'true' },
+        // 同 `sessionSlice`：展开事务 A 刚写过 journal 的那一行，否则回执落不进去。
         next: {
-          ...acquired.privateState,
+          ...privateState,
           internalSubphase: parseInternalSubphase('COLLECTING'),
         },
       };
@@ -711,6 +729,7 @@ function sealSlice(
           code: 'WORK_CONTRACT_BLOCKED',
           at: drive.now,
           state: 'BLOCKED',
+          via: 'VALIDATING',
         });
       }
 
@@ -730,6 +749,7 @@ function sealSlice(
           code: 'WORK_CONTRACT_BLOCKED',
           at: drive.now,
           state: 'BLOCKED',
+          via: 'VALIDATING',
         });
       }
 
@@ -913,18 +933,30 @@ function commitSlice(
         } else {
           const project = await bound.projects.findById(projectId);
           if (project === null) throw new DomainError('RESOURCE_NOT_FOUND', 'Project');
+          // §3.5：sequence 从本事务锁定的 project 现有版本递增。端口没有"列出某项目全部
+          // 版本"，但 `current_version_id` 就是这条链的尾 ⇒ 父版本 +1 即下一个，且仍在事务内。
+          const parent =
+            project.currentVersionId === null
+              ? null
+              : await bound.versions.findById(project.currentVersionId);
+          if (project.currentVersionId !== null && parent === null) {
+            throw new DomainError('RESOURCE_NOT_FOUND', 'Project.currentVersionId');
+          }
           version = await bound.versions.insert(
             createProjectVersion({
               id: services.random.uuidV7(),
               projectId: String(projectId),
-              sequence: 1,
+              sequence: parseVersionSequence(parent === null ? 1 : Number(parent.sequence) + 1),
               parentVersionId: project.currentVersionId ?? null,
               sourceTaskId: String(task.id),
               artifactSha256,
               contractVersion: '1.0.0',
               fileCount: privateState.collectionCursor.sealedPaths.length,
               totalBytes: privateState.inputRef.byteLength,
-              buildStatus: 'READY',
+              // 走到这一片的前提是扫描 PASS，所以两个状态都取"通过"那一档。
+              // `BUILD_STATUSES` 只有 VALID/INVALID：工厂收 string、运行时才 parse，
+              // 写错编译期完全看不出来，只有测试能钉住。
+              buildStatus: 'VALID',
               scanStatus: 'PASS',
               createdBy: String(task.requestedBy),
               createdAt: drive.now,
@@ -990,15 +1022,21 @@ function cancelSlice(
         const sequence = await nextEventSequence(services, task.id);
         const saved = await services.unitOfWork.run({ lease, expectedRevision }, async (bound) => {
           const current = await mustFindTask(bound, task.id);
-          const cancelled = isCancelRequested(current)
-            ? transitionTo(current, 'CANCELLED', drive.now)
-            : transitionTo(requestCancel(current, drive.now), 'CANCELLED', drive.now);
+          // 同上：阶段记在非终态那一格，再迁移到 CANCELLED。
+          const requested = isCancelRequested(current)
+            ? current
+            : requestCancel(current, drive.now);
+          const cancelled = transitionTo(
+            recordTaskStage(requested, 'CANCEL', drive.now),
+            'CANCELLED',
+            drive.now,
+          );
           return saveWithEvent(bound, {
-            task: recordTaskStage(cancelled, 'CANCEL', drive.now),
+            task: cancelled,
             expectedRevision: current.revision,
             sequence,
             eventType: 'STATE_CHANGED',
-            safePayload: { stage: 'CANCEL', state: 'CANCELLED' },
+            safePayload: { stage: 'CANCEL', state: cancelled.state },
             at: drive.now,
           });
         });
@@ -1054,10 +1092,15 @@ function cancelSlice(
         });
 
         const requested = isCancelRequested(current) ? current : requestCancel(current, drive.now);
+        // `recordTaskStage` 断言"任务可运行"，终态直接抛 ⇒ 阶段必须记在迁移**之前**那一格。
+        // 反过来的写法（先 CANCELLED 再记阶段）在学生真的点了"停止"的那一刻必炸。
+        const staged = recordTaskStage(requested, 'CANCEL', drive.now);
         // §5.4：远端仍运行/结果未知 ⇒ 留在 CANCELLING（HTTP 层报 202），**不**迁移终态。
-        const next = interrupted ? transitionTo(requested, 'CANCELLED', drive.now) : requested;
+        const next = interrupted ? transitionTo(staged, 'CANCELLED', drive.now) : staged;
+        // `next` 已经从 `staged` 继承到 `stage:'CANCEL'`。再套一次 `recordTaskStage` 会在
+        // `interrupted` 那条分支上对**终态**行调用它，而 `assertTaskRunnable` 对终态直接抛。
         return saveWithEvent(bound, {
-          task: recordTaskStage(next, 'CANCEL', drive.now),
+          task: next,
           expectedRevision: current.revision,
           sequence,
           eventType: 'STATE_CHANGED',
@@ -1206,12 +1249,30 @@ async function failInTransaction(
   expectedRevision: Revision,
   privateState: TaskPrivateRecord,
   task: AiTask,
-  input: { readonly code: ErrorCode; readonly at: Timestamp; readonly state: TaskState },
+  input: {
+    readonly code: ErrorCode;
+    readonly at: Timestamp;
+    readonly state: TaskState;
+    /**
+     * 目标终态从当前状态**一步到不了**时，先合法地走到这一格再落终态。
+     *
+     * 具体只有一种情形：`BLOCKED` 的唯一入边是 `VALIDATING → BLOCKED`，而 SEALING 片
+     * 进场时行还在 `COLLECTING`（`SUBPHASE_WIRE_STATE.COLLECTING`）。此时若不补这一跳，
+     * `transitionTask` 直接抛 `REQUEST_INVALID: TaskState` —— 学生点下去看到的是 500，
+     * 而真实原因是"provider 说回合完成却没给产出"。
+     *
+     * 不改成 `state:'FAILED'` 的理由：`fallbackError` 里 `BLOCKED ↔ WORK_CONTRACT_BLOCKED`
+     * 是 domain 自己配好的一对，写成 FAILED 会造出一对 domain 从不产生的组合。
+     * 这一跳是纯内存计算，最后只有一次 CAS 落库，中间态不外泄。
+     */
+    readonly via?: TaskState;
+  },
 ): Promise<AiTask> {
   return services.unitOfWork.run({ lease, expectedRevision }, async (bound) => {
     const current = await mustFindTask(bound, task.id);
     await bound.privateState.save(privateState);
-    const failed = failTask(current, input.code, input.at, input.state);
+    const base = input.via === undefined ? current : transitionTo(current, input.via, input.at);
+    const failed = failTask(base, input.code, input.at, input.state);
     const saved = await bound.tasks.save({ task: failed, expectedRevision: current.revision });
     if (saved === null) throw new DomainError('REVISION_CONFLICT', 'AiTask');
     return saved;
@@ -1275,6 +1336,10 @@ async function settleReservation(
     reservationEntity(services, task, capability, now),
     TURN_RESERVED_UNITS,
   );
+  // `createUsageLedgerEntry` 的入参 `provider` 是 `string`、运行时才 parse，所以写小写
+  // `'qca'` 编译期一点动静都没有 —— 而炸点正好在 COMMITTING 片里，"产出真的落库"这条
+  // 主张会整条失效。显式标注成 `UsageProvider`，把这件事交回编译器。
+  const provider: UsageProvider = 'QCA';
   const ledger: UsageLedgerEntry = createUsageLedgerEntry({
     id: services.random.uuidV7(),
     // `event_key UNIQUE` + infra 侧 `ON CONFLICT (event_key) DO NOTHING` ⇒ 同一个 task 的
@@ -1284,7 +1349,7 @@ async function settleReservation(
     subjectUserId: String(task.requestedBy),
     capability,
     quantity: TURN_RESERVED_UNITS,
-    provider: 'qca',
+    provider,
     occurredAt: now,
   });
   await bound.reservations.settle({ reservation: committed, ledger });
