@@ -75,7 +75,7 @@ const probe = await createTestDatabaseHarness();
 afterAll(async () => {
   // 探针库全程不写，但必须收掉：留一个库在那儿，会让下一轮"迁移建出了全部表"的断言
   // 在一个已经建好的库上通过 —— 那是个假绿。
-  await probe?.dispose();
+  await probe.dispose();
 });
 
 /** 现场生成的测试口令，长度 24（在 8–128 之内），base64url 无空白、无控制字符。 */
@@ -127,7 +127,6 @@ async function withMigratedDatabase<T>(
   run: (harness: TestDatabaseHarness) => Promise<T>,
 ): Promise<T> {
   const harness = await createTestDatabaseHarness();
-  if (harness === null) throw new Error('B 组需要可达的 Postgres；skipIf 应当已经跳过本用例');
   try {
     await harness.adapter.migrate();
     return await run(harness);
@@ -333,7 +332,7 @@ describe('A 组 · CLI 层的结构性拒绝（不需要数据库）', () => {
   });
 });
 
-describe.skipIf(probe === null)('B 组 · 真库上的建号与口令校验材料', () => {
+describe('B 组 · 真库上的建号与口令校验材料', () => {
   it('B1 · 成功路径：一个事务里建出成人与学生，学生挂在成人下面，两份校验材料都在', async () => {
     await withMigratedDatabase(async (harness) => {
       const password = testPassword();

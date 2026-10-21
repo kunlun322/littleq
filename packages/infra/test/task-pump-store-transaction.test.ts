@@ -275,18 +275,18 @@ describe('判据表对 15 个状态完备（纯函数层，不碰数据库）', 
 /* 真 Postgres 夹具                                                            */
 /* -------------------------------------------------------------------------- */
 
-const harness: TestDatabaseHarness | null = await createTestDatabaseHarness();
+const harness = await createTestDatabaseHarness();
 
 afterAll(async () => {
-  await harness?.dispose();
+  await harness.dispose();
 });
 
 beforeAll(async () => {
-  await harness?.adapter.migrate();
+  await harness.adapter.migrate();
 });
 
+/** `harness` 已非空（挂具拿不到库就抛），这一层只是把「这里要真库」写在调用点上。 */
 function db(): TestDatabaseHarness {
-  if (harness === null) throw new Error('夹具失败：本用例需要真 Postgres');
   return harness;
 }
 
@@ -391,7 +391,7 @@ function verdictOf(result: TaskAcquireResult): string {
   return result.kind === 'LEASED' ? 'LEASED' : `RESULT:${result.outcome}`;
 }
 
-describe.skipIf(harness === null)('真 Postgres：事务形状', () => {
+describe('真 Postgres：事务形状', () => {
   const TASK_LOCK = oneLine(AI_TASK_SELECT_BY_ID_FOR_UPDATE_SQL);
   const PRIVATE_LOCK = oneLine(TASK_PRIVATE_SELECT_FOR_UPDATE_SQL);
   const CAS = oneLine(AI_TASK_ENTITY_CAS_SQL);
@@ -677,7 +677,7 @@ async function journalOf(taskId: TaskId): Promise<readonly OperationJournalEntry
   return taskPrivateFromRow(row).operationJournal;
 }
 
-describe.skipIf(harness === null)('真 Postgres：recordReceipt 与 §11.2 负对照', () => {
+describe('真 Postgres：recordReceipt 与 §11.2 负对照', () => {
   const PRIVATE_LOCK = oneLine(TASK_PRIVATE_SELECT_FOR_UPDATE_SQL);
   const JOURNAL_UPDATE = oneLine(TASK_PRIVATE_UPDATE_JOURNAL_SQL);
 
@@ -1022,7 +1022,7 @@ const STATE_SEED_EXTRAS: Readonly<Record<TaskState, SeedTaskOptions>> = {
   TIMED_OUT: { finishedAt: atSeconds(100), error: { code: 'AGENT_FAILED' } },
 };
 
-describe.skipIf(harness === null)('真 Postgres：判据表逐状态完备（15 × 2）', () => {
+describe('真 Postgres：判据表逐状态完备（15 × 2）', () => {
   let accounts: SeededAccounts | null = null;
 
   beforeAll(async () => {

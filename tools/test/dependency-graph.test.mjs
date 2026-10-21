@@ -259,7 +259,7 @@ const sortKey = (item) => `${item.rule}|${item.surface}|${item.specifier}|${item
 const sorted = (items) => [...items].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 
 describe('真实仓库的边界门禁', () => {
-  it('当前 9 个工作区单元 0 违规', () => {
+  it('当前 10 个工作区单元 0 违规', () => {
     const result = checkDependencyGraph({ root: REPO_ROOT, policyFile: POLICY });
     expect(result.violations).toEqual([]);
     expect(result.unitsChecked).toEqual([
@@ -268,6 +268,10 @@ describe('真实仓库的边界门禁', () => {
       'apps/web',
       'apps/worker',
       'packages/api-contract',
+      // ZLQ-220（F1）落地：§3.5 的两个装配端口住在这个新单元里。这份清单钉的是**成员**
+      // 而不是数量，所以新增一个工作区单元必然要在这里加一行 —— 它的用途是抓住"悄悄多出来
+      // 的单元"，而按 ZLQ-216 §3.5 建包不是悄悄做的。
+      'packages/application',
       'packages/design-system',
       'packages/domain',
       'packages/infra',
@@ -283,17 +287,27 @@ describe('真实仓库的边界门禁', () => {
     expect(result.unitsChecked).toContain('apps/api');
   });
 
-  it('§5.4(4) 的 packages/application 尚未落地，规则保持武装而不是被静默丢弃', () => {
+  it('§5.4(4) 的 packages/application 已落地，规则从"预先武装"变成真的在管一个单元', () => {
     const result = checkDependencyGraph({ root: REPO_ROOT, policyFile: POLICY });
-    // issue 的边界清单里有这一条，但 §1.3 的目录骨架里没有 packages/application。
-    // 处理方式：按路径预先武装，包一出现即被约束；同时在报告里显式列出「已武装但未落地」，
-    // 这样「规则写错了路径」与「包还没建」两种情况在输出里可以区分开。
-    // 受控边把 targetUnit 也算进武装面，但真实仓库里 apps/api 存在，所以清单不变。
-    expect(result.armedButAbsent).toEqual([
+    // 这条用例曾经断言 armedButAbsent 里**有** packages/application：那时 §1.3 的目录骨架里
+    // 还没有这个包，规则只能按路径预先武装，并在报告里显式列出「已武装但未落地」，好把
+    // 「规则写错了路径」与「包还没建」两种情况区分开。ZLQ-220（F1）按 §3.5 建了这个包，
+    // 于是清单空了 —— 规则现在约束的是一个真实存在的单元，不再是一条将来时。
+    expect(result.armedButAbsent).toEqual([]);
+    // 但空清单有两种成因，只有一种是好消息：另一种是规则被删了或路径被改错，那样
+    // armedButAbsent 同样为空。所以下面两句才是判据 —— 单元必须在扫描面里，规则必须还在。
+    expect(result.unitsChecked).toContain('packages/application');
+    expect(result.ruleCount).toBe(10);
+
+    // 阴性对照：夹具树里 packages/design-system **不存在**，同一个字段在那棵树上必须非空。
+    // 少了这一句，上面的 `toEqual([])` 会退化成一条对任何仓库都为真的断言 —— 而"规则被删"
+    // 恰好也让它为真，那就等于把守卫和它要抓的缺陷一起放过了。
+    const fixture = checkDependencyGraph({ root: FIXTURE, policyFile: POLICY });
+    expect(fixture.armedButAbsent).toEqual([
       {
-        rule: 'domain-and-application-no-drivers',
-        unit: 'packages/application',
-        spec: 'ZLQ-153 §5.4(4)',
+        rule: 'design-system-no-business-coupling',
+        unit: 'packages/design-system',
+        spec: 'ZLQ-153 §1.3（packages/design-system 不耦合业务数据请求）',
       },
     ]);
   });

@@ -35,8 +35,12 @@
  * `assertColumnMatches` 在下一次读这一行时抛 `STORED_ROW_INCONSISTENT`，那是给自己埋雷。
  *
  * ## 没有数据库时
- * Layer A 照跑；Layer B 由 `describe.skipIf(harness === null)` 记成 **skipped**（不是 passed），
- * 并 `console.warn` 说明怎么打开。§2.2 明确禁止用进程内存储假装交付，所以这里不提供替身路径。
+ * Layer A 照跑；Layer B 直接**红**：挂具在探测不到 Postgres 时抛（见 `support-database.ts`
+ * 文件头），模块收集失败，用例记成 failed 而不是 skipped。早先这里用
+ * `describe.skipIf(harness === null)`，被 `readiness-no-retirement-tokens` 判成 17 处违规 ——
+ * 那道门把 `skipIf` 与 `skip`/`only`/`todo` 并列禁掉，理由是「被跳过的用例不会变红，
+ * 只会消失」，而指望交付评论去报 skipped 计数并不满足它：计数只有有人读才可见。
+ * §2.2 明确禁止用进程内存储假装交付，所以这里不提供替身路径。
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -177,14 +181,14 @@ describe('租约时长下界：生产驱动与内存替身给出同一份判决'
 /* Layer B：真 Postgres 上的领取互斥、令牌所有权、CAS 与 bigint 精度            */
 /* -------------------------------------------------------------------------- */
 
-const harness: TestDatabaseHarness | null = await createTestDatabaseHarness();
+const harness = await createTestDatabaseHarness();
 
 afterAll(async () => {
-  await harness?.dispose();
+  await harness.dispose();
 });
 
 beforeAll(async () => {
-  await harness?.adapter.migrate();
+  await harness.adapter.migrate();
 });
 
 type CountRow = { readonly n: string };
@@ -207,14 +211,13 @@ SET state = 'CANCELLED', payload = jsonb_set(payload, '{state}', '"CANCELLED"')
 WHERE state = 'QUEUED'`;
 
 beforeEach(async () => {
-  if (harness === null) return;
   await harness.adapter.transaction(async (tx) => {
     await tx.execute(DRAIN_QUEUE_SQL, []);
   });
 });
 
+/** `harness` 已非空（挂具拿不到库就抛），这一层只是把「这里要真库」写在调用点上。 */
 function db(): TestDatabaseHarness {
-  if (harness === null) throw new Error('夹具失败：本用例需要真 Postgres');
   return harness;
 }
 
@@ -264,7 +267,7 @@ function makeEvent(taskId: TaskId, sequence: number) {
   });
 }
 
-describe.skipIf(harness === null)('真 Postgres：跨连接池的领取互斥', () => {
+describe('真 Postgres：跨连接池的领取互斥', () => {
   it('两个独立连接池抢**同一个**任务，恰好一个赢，输的拿到空数组', async () => {
     // 这是替身文件头第一条 ❌ 的兑现。仲裁者必须真的是数据库：两个池 ⇒ 两条真连接 ⇒
     // 两个真后端，`FOR UPDATE SKIP LOCKED` 才有东西可裁。共用一个池会被池排到同一条连接上。
@@ -399,7 +402,7 @@ describe.skipIf(harness === null)('真 Postgres：跨连接池的领取互斥', 
   });
 });
 
-describe.skipIf(harness === null)('真 Postgres：令牌是唯一的所有权凭据', () => {
+describe('真 Postgres：令牌是唯一的所有权凭据', () => {
   it('接管过期租约后状态不变、令牌换掉，旧令牌续租得到 null', async () => {
     // `SESSION_CREATING` 而不是 `CLAIMED`：`canRequeueOnLeaseExpiry` 只认 `CLAIMED`，
     // 于是这个状态上"接管"与"退回队列"两条路可区分（下面那组用例钉另一半）。
@@ -506,7 +509,7 @@ describe.skipIf(harness === null)('真 Postgres：令牌是唯一的所有权凭
   });
 });
 
-describe.skipIf(harness === null)('真 Postgres：租约过期回退仅限 CLAIMED', () => {
+describe('真 Postgres：租约过期回退仅限 CLAIMED', () => {
   it('CLAIMED + 已过期 ⇒ 退回 QUEUED 并交出三列租约', async () => {
     const task = await seedTask(db());
     const [lease] = await repository().claim({ ...CLAIM_INPUT, workerId: 'worker-a' });
@@ -540,7 +543,7 @@ describe.skipIf(harness === null)('真 Postgres：租约过期回退仅限 CLAIM
   });
 });
 
-describe.skipIf(harness === null)('真 Postgres：revision CAS 返回 null 而不抛', () => {
+describe('真 Postgres：revision CAS 返回 null 而不抛', () => {
   it('期望版本不匹配 ⇒ null，且行一个字节都没变', async () => {
     const task = await seedTask(db());
     const before = await leaseColumnsOf(task.id);
@@ -608,52 +611,48 @@ describe.skipIf(harness === null)('真 Postgres：revision CAS 返回 null 而�
   });
 });
 
-describe.skipIf(harness === null)(
-  '真 Postgres：非法租约时长在开事务之前就拒（申报的差异 1）',
-  () => {
-    it('空队列上 leaseSeconds = 0 也抛 LEASE_TTL_OUT_OF_RANGE，而替身在这种情况下返回空数组', async () => {
-      // 正对照：队列此刻确实是空的（`beforeEach` 清过），否则本用例测的就不是"空队列"。
-      const drained = await repository().claim({
-        ...CLAIM_INPUT,
-        workerId: 'worker-drain',
-        limit: 100,
-      });
-      expect(drained).toEqual([]);
-      expect(await countQueued(), '夹具应当已把队列领空').toBe(0);
-
-      let thrown: unknown = null;
-      try {
-        await repository().claim({ workerId: 'worker-a', now: at(0), leaseSeconds: 0, limit: 1 });
-      } catch (error) {
-        thrown = error;
-      }
-      expect(codeOf(thrown)).toBe('LEASE_TTL_OUT_OF_RANGE');
-
-      // 同输入打到替身上：空队列 ⇒ `[]`，不抛。这条差异是**收紧**（§8 只禁止放宽），
-      // 把它写下来，免得将来有人以为两边"应当"完全同形而把生产的先验拆掉。
-      const memory = new InMemoryTaskRepository();
-      expect(
-        await memory.claim({ workerId: 'worker-a', now: at(0), leaseSeconds: 0, limit: 1 }),
-      ).toEqual([]);
+describe('真 Postgres：非法租约时长在开事务之前就拒（申报的差异 1）', () => {
+  it('空队列上 leaseSeconds = 0 也抛 LEASE_TTL_OUT_OF_RANGE，而替身在这种情况下返回空数组', async () => {
+    // 正对照：队列此刻确实是空的（`beforeEach` 清过），否则本用例测的就不是"空队列"。
+    const drained = await repository().claim({
+      ...CLAIM_INPUT,
+      workerId: 'worker-drain',
+      limit: 100,
     });
+    expect(drained).toEqual([]);
+    expect(await countQueued(), '夹具应当已把队列领空').toBe(0);
 
-    it('limit 非法时返回空数组而不抛，且不动库', async () => {
-      const task = await seedTask(db());
-      const repo = repository();
-      for (const limit of [0, -1, 1.5]) {
-        expect(
-          await repo.claim({ ...CLAIM_INPUT, limit }),
-          `limit=${limit} 应当返回空数组`,
-        ).toEqual([]);
-      }
-      const columns = await leaseColumnsOf(task.id);
-      expect(columns.state).toBe('QUEUED');
-      expect(columns.lease_token).toBeNull();
-    });
-  },
-);
+    let thrown: unknown = null;
+    try {
+      await repository().claim({ workerId: 'worker-a', now: at(0), leaseSeconds: 0, limit: 1 });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(codeOf(thrown)).toBe('LEASE_TTL_OUT_OF_RANGE');
 
-describe.skipIf(harness === null)('真 Postgres：领取是原子的', () => {
+    // 同输入打到替身上：空队列 ⇒ `[]`，不抛。这条差异是**收紧**（§8 只禁止放宽），
+    // 把它写下来，免得将来有人以为两边"应当"完全同形而把生产的先验拆掉。
+    const memory = new InMemoryTaskRepository();
+    expect(
+      await memory.claim({ workerId: 'worker-a', now: at(0), leaseSeconds: 0, limit: 1 }),
+    ).toEqual([]);
+  });
+
+  it('limit 非法时返回空数组而不抛，且不动库', async () => {
+    const task = await seedTask(db());
+    const repo = repository();
+    for (const limit of [0, -1, 1.5]) {
+      expect(await repo.claim({ ...CLAIM_INPUT, limit }), `limit=${limit} 应当返回空数组`).toEqual(
+        [],
+      );
+    }
+    const columns = await leaseColumnsOf(task.id);
+    expect(columns.state).toBe('QUEUED');
+    expect(columns.lease_token).toBeNull();
+  });
+});
+
+describe('真 Postgres：领取是原子的', () => {
   it('批次里一个任务的 payload 损坏 ⇒ 整批回滚，同批的另一个任务不留半个领取', async () => {
     const healthy = await seedTask(db());
     const poisoned = await seedTask(db());
@@ -699,7 +698,7 @@ describe.skipIf(harness === null)('真 Postgres：领取是原子的', () => {
   });
 });
 
-describe.skipIf(harness === null)('真 Postgres：findById 往返与 bigint 精度', () => {
+describe('真 Postgres：findById 往返与 bigint 精度', () => {
   it('未知 id ⇒ null（不是抛，也不是一个空实体）', async () => {
     await seedTask(db());
     expect(await repository().findById(makeTask().id)).toBeNull();

@@ -8,12 +8,13 @@
  * 约束真的会拒、幂等重跑真的不重复应用、advisory lock 真的挡住了并发迁移。
  *
  * 两层缺一不可。只有文本层，一份"写着 CHECK 却被数据库忽略"的 DDL 也能全绿；
- * 只有真库层，没有数据库的机器上就是一片跳过 —— 而一片跳过看起来和一片通过一样安静。
+ * 只有真库层，没有数据库的机器上就是一片红 —— 而红至少不会被误读成"验过了"。
  *
  * ## 没有数据库时
- * `createTestDatabaseHarness()` 返回 `null`，`describe.skipIf` 让执行器把这些用例记成
- * **skipped**（不是 passed），并 `console.warn` 说明怎么打开。§2.2 明确禁止用进程内
- * 存储假装交付，所以这里不提供任何内存替身。
+ * `createTestDatabaseHarness()` **抛**，不返回 `null`；模块顶层的 `await` 于是让整份文件
+ * 收集失败、用例记成 failed。§9.2 规则 5 禁止用 `skipIf` 让门禁静默通过，而"跳过但计数
+ * 可见"仍然要把可见性寄托在有人去读计数上 —— 直接红不需要任何人读任何东西。
+ * §2.2 明确禁止用进程内存储假装交付，所以这里不提供任何内存替身。
  *
  * ## 时间戳用 EPOCH 常量，不用 `new Date()`
  * 这一层已经必然读宿主状态（连数据库就是），但没必要连**时间**也读：所有 `updated_at`
@@ -39,16 +40,16 @@ import {
   type TestDatabaseHarness,
 } from './support-database.js';
 
-const harness: TestDatabaseHarness | null = await createTestDatabaseHarness();
+const harness = await createTestDatabaseHarness();
 
 afterAll(async () => {
-  await harness?.dispose();
+  await harness.dispose();
 });
 
 // 放在顶层而不是某个 describe 里：三个 describe 共用同一个库，靠"第一个块先跑"来迁移
 // 是一条隐式次序依赖，vitest 换个执行策略就会变成一片莫名其妙的 42P01（表不存在）。
 beforeAll(async () => {
-  await harness?.adapter.migrate();
+  await harness.adapter.migrate();
 });
 
 /** pg 驱动错误的可读子集。适配器不做统一映射，所以约束违反会带着 SQLSTATE 原样抛上来。 */
@@ -134,7 +135,7 @@ async function insertTask(
   return id;
 }
 
-describe.skipIf(harness === null)('迁移 runner（真 Postgres）', () => {
+describe('迁移 runner（真 Postgres）', () => {
   const h = harness as TestDatabaseHarness;
 
   it('已经是最新时，重跑迁移应用 0 条、schemaVersion 仍是 1', async () => {
@@ -145,7 +146,6 @@ describe.skipIf(harness === null)('迁移 runner（真 Postgres）', () => {
   it('空库上的首次迁移报告应用了 0001_initial_slice', async () => {
     // 正对照：必须在一个**没迁移过**的库上看首次报告，否则这条只是上一条的复述。
     const fresh = await createTestDatabaseHarness();
-    if (fresh === null) return;
     try {
       expect(await fresh.adapter.migrate()).toEqual({
         applied: ['0001_initial_slice'],
@@ -181,7 +181,6 @@ describe.skipIf(harness === null)('迁移 runner（真 Postgres）', () => {
     // §3.2：「迁移 runner 按版本/checksum 执行」。这条约束的意义是发现"已应用的迁移被事后
     // 改写"—— 两个环境的 schema 会分叉且无人知晓，所以必须报错而不是静默跳过。
     const tampered = await createTestDatabaseHarness();
-    if (tampered === null) return;
     try {
       await tampered.adapter.migrate();
       await tampered.adapter.transaction((tx) =>
@@ -206,7 +205,6 @@ describe.skipIf(harness === null)('迁移 runner（真 Postgres）', () => {
     // `CREATE TABLE IF NOT EXISTS` 本身幂等，但 `schema_migrations` 的写入不是：
     // 没有 advisory lock，两个实例会各写一行同版本记录，或一个在另一个建表途中失败。
     const fresh = await createTestDatabaseHarness();
-    if (fresh === null) return;
     const secondSource = await createPgClientSource({
       connectionString: fresh.connectionString,
       maxConnections: 2,
@@ -228,7 +226,7 @@ describe.skipIf(harness === null)('迁移 runner（真 Postgres）', () => {
   });
 });
 
-describe.skipIf(harness === null)('§3.2 schema 在真库里的形状', () => {
+describe('§3.2 schema 在真库里的形状', () => {
   const h = harness as TestDatabaseHarness;
 
   it('17 张表全部存在，且没有多建', async () => {
@@ -318,7 +316,7 @@ describe.skipIf(harness === null)('§3.2 schema 在真库里的形状', () => {
   });
 });
 
-describe.skipIf(harness === null)('§3.2 约束在真库里真的会拒', () => {
+describe('§3.2 约束在真库里真的会拒', () => {
   const h = harness as TestDatabaseHarness;
 
   it('负对照：revision = 0 被 CHECK 拒（23514）', async () => {
@@ -468,7 +466,6 @@ describe.skipIf(harness === null)('§3.2 约束在真库里真的会拒', () => 
   it('close() 之后再开事务报 PROVIDER_UNAVAILABLE，且不泄漏连接串', async () => {
     // §4.1：不得把驱动原文透出去 —— 原文里通常原样印着连接目标（含口令）。
     const doomed = await createTestDatabaseHarness();
-    if (doomed === null) return;
     try {
       await doomed.adapter.migrate();
       await doomed.adapter.close();

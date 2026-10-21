@@ -13,17 +13,22 @@
  * / `uuidv7.test.ts`（它们钉 SQL 文本与形状，任何机器上都跑、都红得一样）；本文件只承担
  * "需要一台 Postgres"的那一半。
  *
- * ## 拿不到数据库时**大声**跳过，不静默通过
+ * ## 拿不到数据库时**大声失败**，既不静默通过、也不静默跳过
  *
  * 上面那条约束里最要命的半句是"那种分歧不会报错"。一个悄悄跳过的集成测试正是同一种病：
- * 门禁全绿，而绿的原因是根本没跑。所以这里的跳过有三重可见性 ——
+ * 门禁全绿，而绿的原因是根本没跑。所以这里**不返回 `null`**：探测不到可用的 Postgres 就
+ * 直接抛，调用方在模块顶层 `await`，于是整个测试文件收集失败、里面的用例一律记成 failed
+ * —— 数字不会消失，只会变红。
  *
- * 1. `console.warn` 打出**为什么**跳、以及怎么让它跑（设 `LQ_TEST_DATABASE_URL`）；
- * 2. 调用方一律用 `describe.skipIf(harness === null)`，于是执行器的计数里会出现
- *    skipped，交付评论报的是执行器的真实数字，跳过无法被藏进"通过"里；
- * 3. 本文件**不提供任何内存替身**。§2.2 逐字：「若用户不愿完成此动作，不把 DB 换成
- *    进程内或浏览器存储来假交付」—— 拿不到真库时的正确答案是"这一项没有证据"，
- *    不是"用假库造一条证据"。
+ * 这条不是风格偏好，而是 ZLQ-194 §9.2 规则 5 的直接后果。`readiness-no-retirement-tokens`
+ * 那道门把 `skipIf` 与 `skip` / `only` / `todo` 并列禁掉，理由写得很清楚：「被跳过的用例
+ * 不会变红，只会消失」。早先这里的设计是「返回 `null` + 调用方 `describe.skipIf`」，指望
+ * 执行器计数里的 skipped 把跳过暴露出来 —— 但计数只有在有人读它的时候才可见，而门要的是
+ * **不读计数也藏不住**。于是挂具改成必得，`skipIf` 全部退场。
+ *
+ * 本文件**不提供任何内存替身**。§2.2 逐字：「若用户不愿完成此动作，不把 DB 换成
+ * 进程内或浏览器存储来假交付」—— 拿不到真库时的正确答案是"这一项没有证据、并且红给
+ * 所有人看"，不是"用假库造一条证据"，也不是"跳过然后宣布全绿"。
  *
  * ## 每次运行一个新数据库
  *
@@ -68,9 +73,10 @@ import { EPOCH } from './support.js';
 /** 让挂具用它的连接串；设了它就一定用它，不再去探测本机默认实例。 */
 export const TEST_DATABASE_URL_ENV_VAR = 'LQ_TEST_DATABASE_URL';
 
-const SKIP_HINT =
-  `跳过真 Postgres 测试：没有可用的数据库。设 ${TEST_DATABASE_URL_ENV_VAR} 指向一个` +
-  '可以随意建库/删库的 Postgres（例如 postgres://USER@127.0.0.1:5432/postgres）即可让它们执行。';
+const MISSING_DATABASE_HINT =
+  `真 Postgres 测试需要一台可达的数据库，而一个都没有探测到。设 ${TEST_DATABASE_URL_ENV_VAR} ` +
+  '指向一个可以随意建库/删库的 Postgres（例如 postgres://USER@127.0.0.1:5432/postgres）。' +
+  '刻意不降级成跳过：§9.2 规则 5 禁止用 skipIf 让门禁静默通过，被跳过的用例不会变红，只会消失。';
 
 export type TestDatabaseHarness = {
   readonly adapter: PostgresDatabaseAdapter;
@@ -146,11 +152,15 @@ function withDatabase(baseUrl: string, databaseName: string): string {
  * 调用方：
  * ```ts
  * const harness = await createTestDatabaseHarness();
- * afterAll(async () => { await harness?.dispose(); });
- * describe.skipIf(harness === null)('…', () => { … });
+ * afterAll(async () => { await harness.dispose(); });
+ * describe('…', () => { … });
  * ```
+ *
+ * 拿不到数据库时**抛**，不返回 `null`：调用方在模块顶层 `await`，于是整份文件收集失败。
+ * 返回类型里没有 `| null`，是为了让编译器替我们守住这条 —— 任何 `if (harness === null)
+ * return;` 都会以 TS2367 报出来，而那种提前返回正是一条"什么都不验也报绿"的假绿路径。
  */
-export async function createTestDatabaseHarness(): Promise<TestDatabaseHarness | null> {
+export async function createTestDatabaseHarness(): Promise<TestDatabaseHarness> {
   for (const baseUrl of candidateBaseUrls()) {
     const baseSource = await probe(baseUrl);
     if (baseSource === null) continue;
@@ -193,8 +203,7 @@ export async function createTestDatabaseHarness(): Promise<TestDatabaseHarness |
       },
     };
   }
-  console.warn(SKIP_HINT);
-  return null;
+  throw new Error(MISSING_DATABASE_HINT);
 }
 
 /** 在**已迁移**的库上执行一段 SQL，用于断言 schema 事实（`information_schema` 等）。 */

@@ -101,12 +101,12 @@ import {
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-// 真库可达性探针。不可达时整组**大声跳过**（`skipIf`），而不是静默通过 ——
-// 所以报数时 skipped 必须单列。
+// 真库可达性探针。挂具在拿不到数据库时**抛**（见 support-database.ts 文件头），
+// 于是模块收集失败、整组记成 failed —— 不是 skipped，因为 §9.2 规则 5 禁止 skipIf。
 const probe = await createTestDatabaseHarness();
 
 afterAll(async () => {
-  await probe?.dispose();
+  await probe.dispose();
 });
 
 /** 一次一个已迁移的库；用完即弃，避免用例之间靠残留行互相污染。 */
@@ -114,7 +114,6 @@ async function withMigratedDatabase<T>(
   run: (harness: TestDatabaseHarness) => Promise<T>,
 ): Promise<T> {
   const harness = await createTestDatabaseHarness();
-  if (harness === null) throw new Error('本组需要可达的 Postgres；skipIf 应当已经跳过本用例');
   try {
     await harness.adapter.migrate();
     return await run(harness);
@@ -312,7 +311,7 @@ function differentKeyBytes(): string {
   return createHash('sha256').update('a deliberately different master key').digest('hex');
 }
 
-describe.skipIf(probe === null)('C 组 · BlobDigestIndex 的三条路径（§3.3，真库）', () => {
+describe('C 组 · BlobDigestIndex 的三条路径（§3.3，真库）', () => {
   it('C1 · 首次插入 ⇒ 恰好一行，且 digestOf 读回同一个摘要', async () => {
     await withMigratedDatabase(async (harness) => {
       const index = PostgresBlobDigestIndex.of(harness.adapter);
@@ -440,199 +439,196 @@ describe.skipIf(probe === null)('C 组 · BlobDigestIndex 的三条路径（§3.
   });
 });
 
-describe.skipIf(probe === null)(
-  'D 组 · §11.2 否定对照：真索引 + 假 provider 传输（每条都先跑阳性对照）',
-  () => {
-    it('D1 · 阳性对照：写进去，再从**另一条连接**读回来，摘要与字节都对', async () => {
-      await withMigratedDatabase(async (harness) => {
-        const sdk = new FakeBlobSdk();
-        const store = makeStore(sdk, PostgresBlobDigestIndex.of(harness.adapter));
-        const key = 'artifacts/dd/positive';
-        const body = bytes(32, 11);
-        const sha256 = sha256Of(body);
+describe('D 组 · §11.2 否定对照：真索引 + 假 provider 传输（每条都先跑阳性对照）', () => {
+  it('D1 · 阳性对照：写进去，再从**另一条连接**读回来，摘要与字节都对', async () => {
+    await withMigratedDatabase(async (harness) => {
+      const sdk = new FakeBlobSdk();
+      const store = makeStore(sdk, PostgresBlobDigestIndex.of(harness.adapter));
+      const key = 'artifacts/dd/positive';
+      const body = bytes(32, 11);
+      const sha256 = sha256Of(body);
 
-        const ref = await store.putImmutable(putInput(body, key, sha256));
-        expect(ref).toBe(parseObjectRef(key));
-        // provider 收到的 access 必须是字面量 private，且不许覆盖。
-        expect(sdk.putPathnames).toEqual([key]);
+      const ref = await store.putImmutable(putInput(body, key, sha256));
+      expect(ref).toBe(parseObjectRef(key));
+      // provider 收到的 access 必须是字面量 private，且不许覆盖。
+      expect(sdk.putPathnames).toEqual([key]);
 
-        // PM 复算项①：读回要走**另一条连接**，而不是同一个池里刚用过的那条。
-        const secondary = await secondaryAdapter(harness);
-        try {
-          const otherIndex = PostgresBlobDigestIndex.of(secondary.adapter);
-          expect(await otherIndex.digestOf(key)).toBe(sha256);
+      // PM 复算项①：读回要走**另一条连接**，而不是同一个池里刚用过的那条。
+      const secondary = await secondaryAdapter(harness);
+      try {
+        const otherIndex = PostgresBlobDigestIndex.of(secondary.adapter);
+        expect(await otherIndex.digestOf(key)).toBe(sha256);
 
-          const otherStore = makeStore(sdk, otherIndex);
-          const metadata = await otherStore.head(ref);
-          expect(metadata?.sha256).toBe(sha256);
-          // §3.3 的禁令：ETag 不是摘要，且两者必须可区分。
-          expect(metadata?.etag).toBe(`"${key}"`);
-          expect(metadata?.etag).not.toBe(sha256);
-          expect(metadata?.byteLength).toBe(body.byteLength);
+        const otherStore = makeStore(sdk, otherIndex);
+        const metadata = await otherStore.head(ref);
+        expect(metadata?.sha256).toBe(sha256);
+        // §3.3 的禁令：ETag 不是摘要，且两者必须可区分。
+        expect(metadata?.etag).toBe(`"${key}"`);
+        expect(metadata?.etag).not.toBe(sha256);
+        expect(metadata?.byteLength).toBe(body.byteLength);
 
-          const stream = await otherStore.getPrivate({
-            ref,
-            maxBytes: 1024,
-            abortSignal: idleAbortSignal(),
-          });
-          expect(stream.sha256).toBe(sha256);
-          expect(await collect(stream.body)).toEqual(body);
-        } finally {
-          await secondary.dispose();
-        }
-      });
-    });
-
-    it('D2 · 注入「索引缺失」：provider 里有对象，但平台没写过它 ⇒ head 与 getPrivate（含 Range）一律 404', async () => {
-      await withMigratedDatabase(async (harness) => {
-        const sdk = new FakeBlobSdk();
-        const index = PostgresBlobDigestIndex.of(harness.adapter);
-        const store = makeStore(sdk, index);
-        const key = 'artifacts/dd/unindexed';
-        const body = bytes(24, 12);
-
-        // 阳性对照先跑：同样的形状（provider 有对象）在**索引存在**时是可读的。
-        await index.remember(key, sha256Of(body));
-        sdk.blobs.set(key, {
-          bytes: body,
-          contentType: 'application/octet-stream',
-          etag: `"${key}"`,
+        const stream = await otherStore.getPrivate({
+          ref,
+          maxBytes: 1024,
+          abortSignal: idleAbortSignal(),
         });
-        expect((await store.head(parseObjectRef(key)))?.sha256).toBe(sha256Of(body));
-
-        // 注入：只删索引行，provider 里的对象**不动**。
-        await harness.adapter.transaction(async (tx) => {
-          await tx.execute('DELETE FROM blob_digest_index WHERE pathname = $1', [key]);
-        });
-        expect(sdk.blobs.has(key)).toBe(true);
-        expect(await index.digestOf(key)).toBeNull();
-
-        // 变红。
-        expect(await store.head(parseObjectRef(key))).toBeNull();
-        expect(
-          await rejectedCode(
-            store.getPrivate({
-              ref: parseObjectRef(key),
-              maxBytes: 1024,
-              abortSignal: idleAbortSignal(),
-            }),
-          ),
-        ).toBe('OBJECT_NOT_FOUND');
-        // Range 读取也必须被挡：只挡整对象读取的话，攻击者改用 `bytes=0-0` 就能读通。
-        expect(
-          await rejectedCode(
-            store.getPrivate({
-              ref: parseObjectRef(key),
-              range: { start: 0, endInclusive: 0 },
-              maxBytes: 1024,
-              abortSignal: idleAbortSignal(),
-            }),
-          ),
-        ).toBe('OBJECT_NOT_FOUND');
-
-        // 还原 ⇒ 变绿。
-        await index.remember(key, sha256Of(body));
-        expect((await store.head(parseObjectRef(key)))?.sha256).toBe(sha256Of(body));
-      });
+        expect(stream.sha256).toBe(sha256);
+        expect(await collect(stream.body)).toEqual(body);
+      } finally {
+        await secondary.dispose();
+      }
     });
+  });
 
-    it('D3 · 注入「摘要故意错误」：provider **根本没被联系**，索引里也不留行', async () => {
-      await withMigratedDatabase(async (harness) => {
-        const sdk = new FakeBlobSdk();
-        const index = PostgresBlobDigestIndex.of(harness.adapter);
-        const store = makeStore(sdk, index);
-        const key = 'artifacts/dd/wrong-digest';
-        const body = bytes(24, 13);
+  it('D2 · 注入「索引缺失」：provider 里有对象，但平台没写过它 ⇒ head 与 getPrivate（含 Range）一律 404', async () => {
+    await withMigratedDatabase(async (harness) => {
+      const sdk = new FakeBlobSdk();
+      const index = PostgresBlobDigestIndex.of(harness.adapter);
+      const store = makeStore(sdk, index);
+      const key = 'artifacts/dd/unindexed';
+      const body = bytes(24, 12);
 
-        // 阳性对照：摘要正确时能写成。记下此刻的调用轨迹，好在注入之后比对「一次都没多」。
-        const goodKey = 'artifacts/dd/right-digest';
-        await store.putImmutable(putInput(body, goodKey, sha256Of(body)));
-        expect(sdk.putPathnames).toEqual([goodKey]);
-        const putsBefore = sdk.putPathnames.length;
-        const headsBefore = sdk.headCalls.length;
-        expect(headsBefore).toBe(1);
-
-        // 注入：同一份内容，声称一个**不同**的合法摘要。
-        const wrong = sha256Of(bytes(24, 14));
-        expect(wrong).not.toBe(sha256Of(body));
-        expect(await rejectedCode(store.putImmutable(putInput(body, key, wrong)))).toBe(
-          'OBJECT_HASH_MISMATCH',
-        );
-
-        // 变红，且红在**联系 provider 之前**：`putImmutable` 先收满流、验完摘要，才 `head`/`put`。
-        // 所以 provider 侧一次调用都没多出来，store 里也不会留一个没人认账的对象。
-        expect(sdk.putPathnames.length).toBe(putsBefore);
-        expect(sdk.headCalls.length).toBe(headsBefore);
-        expect(sdk.blobs.has(key)).toBe(false);
-        expect(await digestRowCount(harness, key)).toBe('0');
-        expect(await index.digestOf(key)).toBeNull();
-
-        // 还原：把摘要改对，同一个 key 就能写成。
-        await store.putImmutable(putInput(body, key, sha256Of(body)));
-        expect(sdk.blobs.has(key)).toBe(true);
-        expect(await index.digestOf(key)).toBe(sha256Of(body));
+      // 阳性对照先跑：同样的形状（provider 有对象）在**索引存在**时是可读的。
+      await index.remember(key, sha256Of(body));
+      sdk.blobs.set(key, {
+        bytes: body,
+        contentType: 'application/octet-stream',
+        etag: `"${key}"`,
       });
-    });
+      expect((await store.head(parseObjectRef(key)))?.sha256).toBe(sha256Of(body));
 
-    it('D4 · 注入「Blob 不存在」：索引里有行、provider 里没有对象 ⇒ 404，且不泄漏「索引里有」', async () => {
-      await withMigratedDatabase(async (harness) => {
-        const sdk = new FakeBlobSdk();
-        const index = PostgresBlobDigestIndex.of(harness.adapter);
-        const store = makeStore(sdk, index);
-        const key = 'artifacts/dd/missing-blob';
-        const body = bytes(24, 15);
-        const sha256 = sha256Of(body);
-
-        // 阳性对照：两边都有时可读。
-        await store.putImmutable(putInput(body, key, sha256));
-        expect((await store.head(parseObjectRef(key)))?.sha256).toBe(sha256);
-
-        // 注入：只从 provider 侧删掉对象，索引行**不动**。
-        sdk.blobs.delete(key);
-        expect(await index.digestOf(key)).toBe(sha256);
-
-        // 变红：与 D2 同一个码。两种缺失（索引缺 / 对象缺）对外**同形**，
-        // 探测者无法据此区分「平台写过但对象丢了」与「平台从没写过」。
-        expect(await store.head(parseObjectRef(key))).toBeNull();
-        expect(
-          await rejectedCode(
-            store.getPrivate({
-              ref: parseObjectRef(key),
-              maxBytes: 1024,
-              abortSignal: idleAbortSignal(),
-            }),
-          ),
-        ).toBe('OBJECT_NOT_FOUND');
-
-        // 还原 ⇒ 变绿。
-        await store.putImmutable(putInput(body, key, sha256));
-        expect((await store.head(parseObjectRef(key)))?.sha256).toBe(sha256);
+      // 注入：只删索引行，provider 里的对象**不动**。
+      await harness.adapter.transaction(async (tx) => {
+        await tx.execute('DELETE FROM blob_digest_index WHERE pathname = $1', [key]);
       });
-    });
+      expect(sdk.blobs.has(key)).toBe(true);
+      expect(await index.digestOf(key)).toBeNull();
 
-    it('D5 · provider 抛 not-found 时按类名翻译成 OBJECT_NOT_FOUND，不读 message', async () => {
-      await withMigratedDatabase(async (harness) => {
-        const sdk = new FakeBlobSdk();
-        const store = makeStore(sdk, PostgresBlobDigestIndex.of(harness.adapter));
-        const key = 'artifacts/dd/provider-404';
-        // 让 `get` 抛一个真 SDK 形状的异常，而不是返回 null。
-        sdk.get = async () => {
-          throw new BlobNotFoundError(`Vercel Blob: not found https://example.invalid/${key}`);
-        };
-        const code = await rejectedCode(
+      // 变红。
+      expect(await store.head(parseObjectRef(key))).toBeNull();
+      expect(
+        await rejectedCode(
           store.getPrivate({
             ref: parseObjectRef(key),
             maxBytes: 1024,
             abortSignal: idleAbortSignal(),
           }),
-        );
-        expect(code).toBe('OBJECT_NOT_FOUND');
-      });
-    });
-  },
-);
+        ),
+      ).toBe('OBJECT_NOT_FOUND');
+      // Range 读取也必须被挡：只挡整对象读取的话，攻击者改用 `bytes=0-0` 就能读通。
+      expect(
+        await rejectedCode(
+          store.getPrivate({
+            ref: parseObjectRef(key),
+            range: { start: 0, endInclusive: 0 },
+            maxBytes: 1024,
+            abortSignal: idleAbortSignal(),
+          }),
+        ),
+      ).toBe('OBJECT_NOT_FOUND');
 
-describe.skipIf(probe === null)('E 组 · owner_secrets 的密文持久化（§3.2，真库）', () => {
+      // 还原 ⇒ 变绿。
+      await index.remember(key, sha256Of(body));
+      expect((await store.head(parseObjectRef(key)))?.sha256).toBe(sha256Of(body));
+    });
+  });
+
+  it('D3 · 注入「摘要故意错误」：provider **根本没被联系**，索引里也不留行', async () => {
+    await withMigratedDatabase(async (harness) => {
+      const sdk = new FakeBlobSdk();
+      const index = PostgresBlobDigestIndex.of(harness.adapter);
+      const store = makeStore(sdk, index);
+      const key = 'artifacts/dd/wrong-digest';
+      const body = bytes(24, 13);
+
+      // 阳性对照：摘要正确时能写成。记下此刻的调用轨迹，好在注入之后比对「一次都没多」。
+      const goodKey = 'artifacts/dd/right-digest';
+      await store.putImmutable(putInput(body, goodKey, sha256Of(body)));
+      expect(sdk.putPathnames).toEqual([goodKey]);
+      const putsBefore = sdk.putPathnames.length;
+      const headsBefore = sdk.headCalls.length;
+      expect(headsBefore).toBe(1);
+
+      // 注入：同一份内容，声称一个**不同**的合法摘要。
+      const wrong = sha256Of(bytes(24, 14));
+      expect(wrong).not.toBe(sha256Of(body));
+      expect(await rejectedCode(store.putImmutable(putInput(body, key, wrong)))).toBe(
+        'OBJECT_HASH_MISMATCH',
+      );
+
+      // 变红，且红在**联系 provider 之前**：`putImmutable` 先收满流、验完摘要，才 `head`/`put`。
+      // 所以 provider 侧一次调用都没多出来，store 里也不会留一个没人认账的对象。
+      expect(sdk.putPathnames.length).toBe(putsBefore);
+      expect(sdk.headCalls.length).toBe(headsBefore);
+      expect(sdk.blobs.has(key)).toBe(false);
+      expect(await digestRowCount(harness, key)).toBe('0');
+      expect(await index.digestOf(key)).toBeNull();
+
+      // 还原：把摘要改对，同一个 key 就能写成。
+      await store.putImmutable(putInput(body, key, sha256Of(body)));
+      expect(sdk.blobs.has(key)).toBe(true);
+      expect(await index.digestOf(key)).toBe(sha256Of(body));
+    });
+  });
+
+  it('D4 · 注入「Blob 不存在」：索引里有行、provider 里没有对象 ⇒ 404，且不泄漏「索引里有」', async () => {
+    await withMigratedDatabase(async (harness) => {
+      const sdk = new FakeBlobSdk();
+      const index = PostgresBlobDigestIndex.of(harness.adapter);
+      const store = makeStore(sdk, index);
+      const key = 'artifacts/dd/missing-blob';
+      const body = bytes(24, 15);
+      const sha256 = sha256Of(body);
+
+      // 阳性对照：两边都有时可读。
+      await store.putImmutable(putInput(body, key, sha256));
+      expect((await store.head(parseObjectRef(key)))?.sha256).toBe(sha256);
+
+      // 注入：只从 provider 侧删掉对象，索引行**不动**。
+      sdk.blobs.delete(key);
+      expect(await index.digestOf(key)).toBe(sha256);
+
+      // 变红：与 D2 同一个码。两种缺失（索引缺 / 对象缺）对外**同形**，
+      // 探测者无法据此区分「平台写过但对象丢了」与「平台从没写过」。
+      expect(await store.head(parseObjectRef(key))).toBeNull();
+      expect(
+        await rejectedCode(
+          store.getPrivate({
+            ref: parseObjectRef(key),
+            maxBytes: 1024,
+            abortSignal: idleAbortSignal(),
+          }),
+        ),
+      ).toBe('OBJECT_NOT_FOUND');
+
+      // 还原 ⇒ 变绿。
+      await store.putImmutable(putInput(body, key, sha256));
+      expect((await store.head(parseObjectRef(key)))?.sha256).toBe(sha256);
+    });
+  });
+
+  it('D5 · provider 抛 not-found 时按类名翻译成 OBJECT_NOT_FOUND，不读 message', async () => {
+    await withMigratedDatabase(async (harness) => {
+      const sdk = new FakeBlobSdk();
+      const store = makeStore(sdk, PostgresBlobDigestIndex.of(harness.adapter));
+      const key = 'artifacts/dd/provider-404';
+      // 让 `get` 抛一个真 SDK 形状的异常，而不是返回 null。
+      sdk.get = async () => {
+        throw new BlobNotFoundError(`Vercel Blob: not found https://example.invalid/${key}`);
+      };
+      const code = await rejectedCode(
+        store.getPrivate({
+          ref: parseObjectRef(key),
+          maxBytes: 1024,
+          abortSignal: idleAbortSignal(),
+        }),
+      );
+      expect(code).toBe('OBJECT_NOT_FOUND');
+    });
+  });
+});
+
+describe('E 组 · owner_secrets 的密文持久化（§3.2，真库）', () => {
   it('E1 · set 之后：configured=true，密文四列非空，而明文在整个行里**不出现**', async () => {
     await withMigratedDatabase(async (harness) => {
       const { ownerId } = await seedAccounts(harness);
