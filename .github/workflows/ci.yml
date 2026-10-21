@@ -51,6 +51,46 @@ jobs:
   quality:
     name: 构建 / 类型 / lint / 依赖图 / 测试
     runs-on: ubuntu-latest
+
+    # 真 PostgreSQL 服务容器（ZLQ-225）。
+    #
+    # 为什么必须有它：`pnpm test` 里有 5 个测试文件走 packages/infra/test/support-database.ts
+    # 这个真库挂具，而挂具在探测不到可用 Postgres 时**抛**（调用方在模块顶层 await），于是整份
+    # 文件收集失败、里面的用例一律记成 failed。那是 ZLQ-194 §9.2 规则 5 的直接后果：
+    # readiness-no-retirement-tokens 门禁把 skipIf / skip / todo 一并禁掉，理由是「被跳过的用例
+    # 不会变红，只会消失」。所以「CI 上没有库」这件事不会被静默跳过掩盖住，它会把整个测试作业
+    # 染红 —— 而这条红不是被测代码的缺陷，是流水线少了一台库。
+    #
+    # 因此让它变绿的唯一正确方式是给 CI 一台真库。以下三种都不许用：加回 skipIf、换进程内或
+    # 内存替身、把这些文件从 CI 里摘掉。
+    #
+    # `postgres:17` 与本地实测版本（PostgreSQL 17.11）同主版本，不要换成别的主版本。
+    # `POSTGRES_HOST_AUTH_METHOD: trust` 只在这个随作业销毁、且只映射到 runner 自身
+    # 127.0.0.1 的一次性容器里成立，**不得**被抄进任何应用配置、迁移 SQL 或文档。
+    # `pg_isready` 那段健康检查是让作业等库真的能接受连接再跑第一步；删掉它会得到一条随
+    # runner 快慢而偶发变红的门禁。
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_HOST_AUTH_METHOD: trust }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+
+    # 真库挂具的连接串。用户 `postgres` 是镜像默认的超级用户，不是 runner 的登录用户；库
+    # `postgres` 是镜像默认建出的那个库 —— 挂具只在它上面 CREATE DATABASE 一个随机名的一次性
+    # 库、跑完 DROP … WITH (FORCE)，默认库本身不承载任何业务数据。这里不含任何凭据。
+    #
+    # 放在作业级而不是「测试」那一步的 step 级：当前只有 `pnpm test` 需要它，但作业级能让将来
+    # 在这个作业里新增的、同样需要真库的门禁自动继承，不必再改一次工作流；而对不需要库的步骤
+    # 它只是一个没人读的环境变量，不改变任何判定。
+    #
+    # e2e-smoke 作业**不加**这套：它跑的 `pnpm test:e2e:smoke` 是 playwright，两个 webServer 都
+    # 是 tools/static-server.mjs 起的纯静态文件服务（apps/web/out 与 artifacts），不连库。
+    env:
+      LQ_TEST_DATABASE_URL: postgres://postgres@127.0.0.1:5432/postgres
+
     steps:
       - uses: actions/checkout@v4
 
