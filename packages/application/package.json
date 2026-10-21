@@ -1,0 +1,26 @@
+{
+  "name": "@littleq/application",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "LittleQ 应用层（ZLQ-216 §3.5 / §10.2 F1）：装配端口的唯一归属。只定义 F2 消费的端口与私有恢复形态，不含业务编排、不含任何平台 SDK 与驱动。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@littleq/domain": "workspace:*",
+    "@littleq/work-contract": "workspace:*"
+  }
+}
