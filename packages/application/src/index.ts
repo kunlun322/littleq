@@ -49,4 +49,7 @@ export * from './ports/task-unit-of-work.js';
 // `SecretPurpose` / `InternalSecretMetadata` 与 infra 的同名导出**逐字同形**，
 // 重述的理由与 `task-lease.ts` 一致：本包不导入 infra，否则 `tsc -b` 的项目引用成环。
 export * from './usecases/ports.js';
+export * from './usecases/authorization.js';
 export * from './usecases/auth.js';
+export * from './usecases/projects.js';
+export * from './usecases/secrets.js';

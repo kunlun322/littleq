@@ -179,6 +179,13 @@ export interface ProjectDirectory {
 export interface TaskReadDirectory {
   findTask(taskId: TaskId): Promise<AiTask | null>;
   /**
+   * 该项目当前**未终态**的写任务，至多一个 —— `ai_tasks_one_active_per_project`
+   * 这条部分唯一索引就是它的存储侧保证，所以这里不需要 `limit`。没有则 `null`。
+   *
+   * `GET /projects/{id}` 的 `activeTask` 键取它（§4.1：两个 nullable 键必须存在）。
+   */
+  findActiveWriteTask(projectId: ProjectId): Promise<AiTask | null>;
+  /**
    * 按 `sequence` 升序返回 `sequence > afterSequence` 的事件；`afterSequence === null`
    * 表示从头开始（SSE 首次连接），否则是 `Last-Event-ID` 重连补发（§5.5）。
    */
@@ -197,8 +204,9 @@ export interface TaskReadDirectory {
  * 与 `@littleq/infra` 的 `SecretPurpose` **同形但各自声明**。
  *
  * 本层不得 import infra（见文件头），而复用它的类型会让「契约层/应用层依赖基础设施层」
- * 这条被禁止的边偷偷成立。F1 在 `task-lease.ts` 里对 `TaskLease` 用了同一手法，并在
- * 那里放了双向可赋值断言；这里同样放一份（见 `assertSecretPurposeCompatible`）。
+ * 这条被禁止的边偷偷成立。F1 在 `task-lease.ts` 里对 `TaskLease` 用了同一手法；这里的
+ * 双向可赋值断言放在 `apps/api/test/application-infra-port-parity.test.ts`，因为组合根
+ * 是唯一同时看得见两份声明的单元。
  */
 export const SECRET_PURPOSES = ['qca-call', 'bailian-call'] as const;
 export type SecretPurpose = (typeof SECRET_PURPOSES)[number];
@@ -216,35 +224,31 @@ export interface InternalSecretMetadata {
 }
 
 /**
- * `SecretAdmin` 的失败形态。
+ * BYO 凭据管理端口。
  *
- * 用例需要**区分**这三种失败来决定下一步（`ALREADY_CONFIGURED` 触发 §3.4 的受控覆盖
- * 分支去调 `rotate`），而 infra 的 `InfraError` 属于下层、不可见。所以组合根把它翻译成
- * 这一层的 `SecretAdminError`，用例只认这三个值。
+ * 这是 infra 那份冻结 `SecretStore` 的**逐字重述**（理由同上：本层不得 import infra，
+ * 而 infra 要 `implements` 它，反向 import 会让 `tsc -b` 的项目引用成环）。双向可赋值
+ * 断言在 `apps/api/test/application-infra-port-parity.test.ts` —— 组合根是唯一同时
+ * 看得见两份声明的单元，所以看守只能放在那里。
+ *
+ * ## 为什么这一层不翻译错误
+ *
+ * `set` 在「已配置且异值」时抛的是下层的 `InfraError('SECRET_ALREADY_CONFIGURED')`，
+ * 本层**不**把它翻译成自己的错误类型。三个理由：
+ * - `packages/infra/src/errors.ts` 里那张 `PUBLIC_ERROR_CODE` 表已经把它钉成
+ *   `REVISION_CONFLICT`、把 `SECRET_NOT_CONFIGURED` 钉成 kind-aware 的
+ *   `QCA_CREDENTIAL_NOT_CONFIGURED` / `BAILIAN_CREDENTIAL_NOT_CONFIGURED`。
+ *   在应用层再编一套等于制造第二个映射事实源，而 §4.1 的响应形状是冻结的。
+ * - 用例**不需要**区分这三种失败来决定下一步：§4.1 把 `PUT` 与 `:rotate` 定成两个
+ *   独立操作，「已配置 ⇒ 客户端改走 `:rotate`」是契约的形状，不是用例里的自动回退。
+ *   在这里做自动回退反而会静默覆盖一份已配置的凭据。
+ * - 因此本层的职责只是「调它、把结果投影成 DTO」，错误原样穿透到组合根的封套映射。
  */
-export const SECRET_ADMIN_CONFLICTS = [
-  'ALREADY_CONFIGURED',
-  'VERSION_CONFLICT',
-  'NOT_CONFIGURED',
-] as const;
-export type SecretAdminConflict = (typeof SECRET_ADMIN_CONFLICTS)[number];
-
-export class SecretAdminError extends Error {
-  readonly conflict: SecretAdminConflict;
-  readonly kind: SecretKind;
-  constructor(conflict: SecretAdminConflict, kind: SecretKind) {
-    super(`${conflict}: ${kind}`);
-    this.name = 'SecretAdminError';
-    this.conflict = conflict;
-    this.kind = kind;
-  }
-}
-
 export interface SecretAdmin {
   metadata(ownerId: string, kind: SecretKind): Promise<InternalSecretMetadata>;
   /**
-   * 首次配置。已配置且**同值**时幂等返回既有 ref；已配置且**异值**时抛
-   * `SecretAdminError('ALREADY_CONFIGURED')` —— 不许静默覆盖（§3.4 逐字）。
+   * 首次配置。已配置且**同值**时幂等返回既有 ref；已配置且**异值**时失败 ——
+   * 不许静默覆盖（§3.4 逐字），客户端必须改走 `rotate`。
    */
   set(input: {
     ownerId: string;
