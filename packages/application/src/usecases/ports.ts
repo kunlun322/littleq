@@ -43,6 +43,7 @@ import type {
   Timestamp,
   UsagePeriod,
   UsageQuotaSnapshot,
+  UsageReservation,
   User,
   UserId,
 } from '@littleq/domain';
@@ -226,6 +227,47 @@ export interface TurnAcceptanceRecord {
   readonly taskId: TaskId;
   readonly requestHash: string;
   readonly projectRevision: Revision;
+}
+
+/**
+ * 重试的写侧：**一个事务**里 CAS 更新 task 行并重新持有该任务的额度预留。
+ *
+ * ## 为什么它不在 F1 的 `TaskUnitOfWork` 里
+ *
+ * `TaskUnitOfWork` 只有两个入口：`createTurn`（受理，自带 project 锁与幂等去重）与
+ * `run`（**已领取租约**后的推进）。重试两头都不沾 —— 任务处在 `FAILED` / `TIMED_OUT`
+ * 终态，没有租约可领，而 `run` 的入参就是 `{lease, expectedRevision}`。把它塞进 `run`
+ * 只能先伪造一份租约；而租约是**推进权**的凭证，不是"我想改这一行"的凭证，伪造它等于
+ * 让重试与真实推进抢同一把单飞锁。所以重试需要自己的端口，且由 F2 拥有（放在
+ * `usecases/` 下），F1 的 `ports/` 一个字没动。
+ *
+ * ## 为什么是"重新持有"而不是"再插一行"
+ *
+ * `usage_reservations` 上有 `CONSTRAINT usage_reservations_task_capability_key UNIQUE
+ * (task_id, capability)`（`packages/infra/src/sql/migrations.ts:396`）—— 一个 task 的一个
+ * capability **只有一行**预留。于是第二次 attempt 不可能 INSERT 出新行：实现必须按这个
+ * 唯一键 UPSERT，把既有那一行重新置为 `HELD` 并刷新 `reserved_units` / `expires_at`。
+ *
+ * 行身份（`id`）因此归实现所有；用例只交出一个用 domain 公开构造函数造的 `HELD`
+ * `UsageReservation` 实体，由实现决定保留旧 `id` 还是采用新的。
+ *
+ * ⚠️ **已声明给 PM 的一处语义缺口**：domain 只有 `commitUsage` / `releaseUsage` /
+ * `expireUsage` 三个迁移函数，**没有** `RELEASED → HELD` 的回退，所以"重新持有"只能用
+ * 构造函数直接造一个 `HELD` 实体来表达，绕过了状态迁移函数（本单不改 domain，故只能如此）。
+ * 账目本身不丢：真正记账的是 `usage_ledger`（append-only、`event_key UNIQUE`），预留行
+ * 只是并发占位的凭证。
+ */
+export interface TaskRetryStore {
+  /**
+   * 返回 `null` 表示 CAS 失败（`expectedRevision` 不匹配），调用方映射 `REVISION_CONFLICT`。
+   * 成功时返回**落库后的** `AiTask`，其 `revision` 就是响应 `ETag` 的来源。
+   */
+  beginRetryAttempt(input: {
+    readonly task: AiTask;
+    readonly expectedRevision: Revision;
+    readonly reservation: UsageReservation;
+    readonly now: Timestamp;
+  }): Promise<AiTask | null>;
 }
 
 // ---------------------------------------------------------------------------

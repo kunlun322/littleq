@@ -54,3 +54,4 @@ export * from './usecases/auth.js';
 export * from './usecases/projects.js';
 export * from './usecases/secrets.js';
 export * from './usecases/turns.js';
+export * from './usecases/tasks.js';
