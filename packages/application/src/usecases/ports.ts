@@ -28,6 +28,8 @@
 import type {
   AccountSession,
   AiTask,
+  ArtifactDigest,
+  Capability,
   Project,
   ProjectId,
   ProjectStatus,
@@ -39,9 +41,12 @@ import type {
   TaskEvent,
   TaskId,
   Timestamp,
+  UsagePeriod,
+  UsageQuotaSnapshot,
   User,
   UserId,
 } from '@littleq/domain';
+import type { ScanFileSource } from '@littleq/work-contract';
 
 // ---------------------------------------------------------------------------
 // 随机性与摘要
@@ -194,6 +199,33 @@ export interface TaskReadDirectory {
     afterSequence: bigint | null,
     limit: number,
   ): Promise<readonly TaskEvent[]>;
+  /**
+   * 幂等 scope 内既有受理记录的**只读**投影，没有则 `null`。
+   *
+   * scope 是 `(projectId, idempotencyKey)`（§5.5：幂等键在项目内唯一，不是全局唯一）。
+   * 只取回放分支需要的三个事实：`taskId`（回给客户端）、`requestHash`（区分"同请求重放"
+   * 与"同 key 不同请求"→ `IDEMPOTENCY_KEY_REUSED`）、`projectRevision`
+   * （**受理时刻**的项目 revision，来自 `ai_tasks.accepted_project_revision` ——
+   * 回放必须返回当年那个值，不能现读项目当前 revision，否则重放会"看见"后来的改动）。
+   *
+   * ## 为什么用例要先读一次，`TaskUnitOfWork.createTurn` 内部还要再查一次
+   *
+   * 事务内那次是**竞态屏障**，也是事实源；这一次是**排序需要**：额度与准入判定必须发生在
+   * 回放短路**之后**，否则一次合法重放会因为额度已被它自己那次受理占满而拿到
+   * `USAGE_LIMIT_EXCEEDED` —— 幂等接口对同一个键给出两种响应，正是 §5.5 要防的事。
+   * 两次读之间的窗口由事务内那次兜住，所以先读不会放宽任何不变量。
+   */
+  findTurnAcceptance(input: {
+    projectId: ProjectId;
+    idempotencyKey: string;
+  }): Promise<TurnAcceptanceRecord | null>;
+}
+
+/** `TaskReadDirectory.findTurnAcceptance` 的返回形状。 */
+export interface TurnAcceptanceRecord {
+  readonly taskId: TaskId;
+  readonly requestHash: string;
+  readonly projectRevision: Revision;
 }
 
 // ---------------------------------------------------------------------------
@@ -289,34 +321,184 @@ export interface TaskInputStore {
 /** 用量额度读侧：`createTurn` 需要它把「额度耗尽」判成 409 而不是先建任务再失败。 */
 export interface UsageDirectory {
   /**
-   * 当前周期内该学生某能力的已用总量。
+   * 本周期内该学生该能力的**额度快照**，形状就是 domain 的 `UsageQuotaSnapshot`。
    *
-   * `null` 表示没有配置限额（不限），`0` 表示额度就是零（§6.6：额度为零只阻断新的
-   * AI task，不阻断读取）。
+   * 返回快照而不是一个「还剩多少」的数字，是因为 `decideUsageAdmission` 要自己核对
+   * `quota.capability` 与任务 kind 推出的 capability 是否一致、并区分「限额行不存在
+   * （不限）」与「限额就是 0」。把这两件事在 SQL 侧先算成一个数，等于把 domain 的判定
+   * 抄进仓储 —— 而「未设上限 ⇒ ADMIT、额度为 0 ⇒ 只阻断新 AI task」是 §6.6 的原文。
    */
-  availableUnits(input: {
+  quotaSnapshot(input: {
     ownerStudentId: UserId;
-    capability: string;
-    period: string;
+    capability: Capability;
+    period: UsagePeriod;
     now: Timestamp;
-  }): Promise<number | null>;
-  /** 活动中的写任务数（准入判定用；§6.5：全局 10 / 小组 3 是**调度**上限）。 */
+  }): Promise<UsageQuotaSnapshot>;
+  /**
+   * 准入判定所需的四个计数（§6.5）。
+   *
+   * 全部来自**持久化状态的计数查询**，不是进程内的 Map 或 semaphore —— §6.5 规则 5
+   * 逐字：进程内状态不是事实源。`groupId` 在本切片恒为 `null`（`Project` 没有小组字段，
+   * 小组视图被 §12.3 排除在本期之外），因此 `group` 恒为 `0`；这两个键仍然保留，
+   * 是因为 `AdmissionContext` 要它们，删掉就等于在这里另编一份准入输入形状。
+   */
   countActiveWriteTasks(input: {
     ownerStudentId: UserId;
     projectId: ProjectId;
-  }): Promise<{ readonly global: number; readonly project: number; readonly student: number }>;
+    now: Timestamp;
+  }): Promise<{
+    readonly global: number;
+    readonly group: number;
+    readonly student: number;
+    readonly project: number;
+  }>;
 }
 
-/** 版本提交后写 `projects.current_version_id` 的 CAS。 */
-export interface ProjectVersionCommitter {
-  /**
-   * 在**一个**事务里把版本追加到项目并推进 `currentVersionId`。
-   *
-   * 返回 `null` 表示 CAS 失败（项目 revision 已变），调用方映射 `REVISION_CONFLICT`。
-   */
-  commit(input: {
-    project: Project;
-    version: ProjectVersion;
-    expectedRevision: Revision;
-  }): Promise<Project | null>;
+// ---------------------------------------------------------------------------
+// provider（QCA Forward）
+// ---------------------------------------------------------------------------
+
+/**
+ * 一次 provider 会话的句柄。
+ *
+ * 这四个字段就是 `ProviderIdentitySnapshot` 的内容 —— 会话恢复要靠它们（§5.4：冷实例
+ * 上 `qca_session_id` 还在，但"它是哪个 template/environment 下的会话"必须能重建），
+ * 所以句柄与快照同形，不留第二个表示。
+ */
+export interface ProviderSessionHandle {
+  readonly sessionId: string;
+  readonly identityId: string;
+  readonly templateId: string;
+  readonly environmentId: string;
+  readonly templateVersion: string | undefined;
+}
+
+/**
+ * provider 事件流的**已脱敏前**形态。
+ *
+ * `TEXT` 是模型输出正文（要进两文件包络的 `index.html`），`FILE` 是 provider 侧产出的
+ * 附加文件（进 manifest），`OTHER` 是既不是正文也不是文件的一切（工具调用、思考、
+ * 心跳）—— 它被显式建模成一个分支，而不是被丢掉，因为"丢掉"和"看见了但决定不用"
+ * 在代码里长得一样，而前者会让 `safePayload` 的白名单失去对照。
+ *
+ * ⚠️ 这里的 `text` / `bytes` 是**未经扫描**的原始产出。它只允许流向两处：
+ * 对象存储（封成产物）与扫描器（判安全）。**不得**流向任何 `TaskEvent.safePayload`、
+ * 任何日志、任何 HTTP 响应体 —— 那是 §5.2 的 BLOCKED 语义要拦的东西。
+ */
+export type ProviderTurnEvent =
+  | { readonly externalId: string; readonly kind: 'TEXT'; readonly text: string }
+  | { readonly externalId: string; readonly kind: 'FILE'; readonly path: string; readonly bytes: Uint8Array }
+  | { readonly externalId: string; readonly kind: 'OTHER' };
+
+export interface ProviderEventBatch {
+  readonly items: readonly ProviderTurnEvent[];
+  /** provider 侧的游标原值，落 `task_private.qca_event_cursor`；本层不解释它的结构。 */
+  readonly nextCursor: string | null;
+  /** provider 认为这一回合已经结束（不再有后续事件）。 */
+  readonly turnComplete: boolean;
+}
+
+/**
+ * QCA Forward 的**服务端 fetch** 客户端（§4.3：不引入 AI SDK）。
+ *
+ * 只有四个方法，对应 §5.3 的四类外呼；每个方法就是**一次**外部操作，因此每个方法最多
+ * 在**一个** pump 切片里被调用一次 —— 这条约束不是注释里的建议，而是 pump 用例的写法：
+ * 它按 `internalSubphase` 分派，一个子相位只调一个方法，然后立刻持久化并返回。
+ *
+ * `externalOperationKey` 由调用方用 domain 的 `formatExternalOperationKey(taskId, stage,
+ * attempt)` 生成并**先落库**（§5.3：外呼前事务保存意图，事务外请求，回执先持久化）。
+ * 实现必须把它当成 provider 侧的幂等键传下去，这样"回执丢失后重放同一个 key"不会
+ * 产生第二次计费动作（§11.2 第 4 项负对照要的就是这个）。
+ *
+ * 每个方法都收 `budgetMs` 与 `abortSignal`：8 秒请求预算里要给 HTTP 响应留时间，
+ * 所以外呼自己必须先于预算结束（§5.1）。实现不得自己 `setTimeout` 续命。
+ */
+export interface TurnProviderClient {
+  createSession(input: {
+    readonly externalOperationKey: string;
+    readonly budgetMs: number;
+    readonly abortSignal: AbortSignal;
+  }): Promise<ProviderSessionHandle>;
+  sendUserMessage(input: {
+    readonly session: ProviderSessionHandle;
+    readonly body: Uint8Array;
+    readonly externalOperationKey: string;
+    readonly budgetMs: number;
+    readonly abortSignal: AbortSignal;
+  }): Promise<void>;
+  listEvents(input: {
+    readonly session: ProviderSessionHandle;
+    readonly cursor: string | null;
+    readonly budgetMs: number;
+    readonly abortSignal: AbortSignal;
+  }): Promise<ProviderEventBatch>;
+  interrupt(input: {
+    readonly session: ProviderSessionHandle;
+    readonly externalOperationKey: string;
+    readonly budgetMs: number;
+    readonly abortSignal: AbortSignal;
+  }): Promise<void>;
+}
+
+/**
+ * provider 的固定配置（§4.3：「既有 Forward Template/Identity/Environment 的固定配置」）。
+ *
+ * 从环境变量读出来交给组合根，用例只负责把它转成 `createSession` 的入参与
+ * `ProviderIdentitySnapshot`。**不在运行时自动注册云资源、不创建新付费计划** ——
+ * 所以这里没有任何 `create*` 方法，只有三个已存在资源的 id。
+ */
+export interface ProviderConfiguration {
+  readonly identityId: string;
+  readonly templateId: string;
+  readonly environmentId: string;
+}
+
+// ---------------------------------------------------------------------------
+// 产物（两文件包络）
+// ---------------------------------------------------------------------------
+
+/**
+ * 产物对象存储。与 infra 的 `ObjectStore` 同向但**更窄**：这一层只需要"写一个不可变
+ * 对象"与"把它当成扫描输入打开"，`head` / `deletePrefix` / `health` 是 infra 与运维的
+ * 事，放进来只会让用例有机会绕过 grant 直读。
+ *
+ * 读取一律经 `openScanSource`（返回 work-contract 的 `ScanFileSource`）或 `read`
+ * （只给 preview grant 的实现用），**不返回任何 provider URL** —— 对外的读取入口只有
+ * 平台自己的 opaque grant URL（infra `ports/object-store.ts` 的同一条红线）。
+ */
+export interface WorkArtifactStore {
+  /** 写一个不可覆盖的对象；同 key 第二次写必须失败，不返回引用。 */
+  put(input: {
+    readonly key: string;
+    readonly body: Uint8Array;
+    readonly contentType: string;
+    readonly abortSignal: AbortSignal;
+  }): Promise<{ readonly objectRef: string; readonly sha256: ArtifactDigest; readonly byteLength: number }>;
+  /** 把已固化的产物打开成扫描输入。产物不存在 ⇒ `RESOURCE_NOT_FOUND`。 */
+  openScanSource(objectRef: string): Promise<ScanFileSource>;
+  read(objectRef: string): Promise<Uint8Array>;
+}
+
+// ---------------------------------------------------------------------------
+// 预览
+// ---------------------------------------------------------------------------
+
+/**
+ * 与 infra 的 `RuntimePublisher.publishPreview` 同形的**只发不撤**子集。
+ *
+ * 刻意不含 `revokePreview`：`POST /projects/{id}/preview` 是签发，撤销属于运维与
+ * grant 层的 TTL，本期没有对外的撤销接口（契约里没有这个 operation）。少一个方法
+ * 就少一条"用例可以悄悄把预览撤掉"的路径。
+ *
+ * 返回的 `url` 是短期、独立源的 opaque grant URL；它**只**进 `createPreviewResponseSchema`
+ * 的 `url` 字段（≤512 字符），不进日志、不进 `TaskEvent`。
+ */
+export interface PreviewPublisher {
+  publishPreview(input: {
+    readonly projectId: ProjectId;
+    readonly projectVersionId: ProjectVersionId;
+    readonly artifactHash: ArtifactDigest;
+    readonly ttlSeconds: number;
+    readonly now: Timestamp;
+  }): Promise<{ readonly url: string; readonly expiresAt: Timestamp }>;
 }
