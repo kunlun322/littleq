@@ -127,10 +127,7 @@ export function safeEqualHex(a: string, b: string): boolean {
  * 抛 `AUTHENTICATION_FAILED` / `ACCOUNT_LOCKED`，两者都由 HTTP 层映射成对应的
  * envelope；`ACCOUNT_LOCKED` 按错误目录是 423，`AUTHENTICATION_FAILED` 是 401。
  */
-export async function login(
-  services: AuthServices,
-  input: LoginInput,
-): Promise<IssuedSession> {
+export async function login(services: AuthServices, input: LoginInput): Promise<IssuedSession> {
   const { accounts, sessions, hasher, random } = services;
   // 格式不合法的登录名也走同一条烧一次 scrypt 的路，否则「这个串像不像登录名」成了可探测的事实。
   const found = isLoginName(input.loginName)
@@ -228,7 +225,10 @@ export async function authenticate(
  * api-contract 明确规定这个头由 `CsrfHeader` security scheme 声明，格式不对也归
  * `CSRF_REJECTED`，否则「令牌缺失」与「请求体字段非法」在日志里会长成同一个样子。
  */
-export function assertCsrfValid(authenticated: AuthenticatedRequest, headerValue: string | null): void {
+export function assertCsrfValid(
+  authenticated: AuthenticatedRequest,
+  headerValue: string | null,
+): void {
   if (headerValue === null || !safeEqualHex(headerValue, authenticated.csrfToken)) {
     throw new DomainError('CSRF_REJECTED', 'X-CSRF-Token');
   }

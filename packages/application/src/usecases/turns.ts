@@ -72,7 +72,13 @@ import {
 import type { CreateTurnResult, TaskUnitOfWork } from '../ports/task-unit-of-work.js';
 import { type Actor, secretOwnerIdOf, studentActorId } from './authorization.js';
 import { type ProjectServices, loadOwnedProject } from './projects.js';
-import type { RandomSource, SecretAdmin, TaskInputStore, TaskReadDirectory, UsageDirectory } from './ports.js';
+import type {
+  RandomSource,
+  SecretAdmin,
+  TaskInputStore,
+  TaskReadDirectory,
+  UsageDirectory,
+} from './ports.js';
 
 /** 本切片的回合只有一种：自然语言生成。`PUBLISH` / `RESCAN` 不在 §1.2 的交付清单里。 */
 export const TURN_TASK_KIND = 'VIBE_TURN' as const;

@@ -324,11 +324,7 @@ export interface SecretAdmin {
    * 首次配置。已配置且**同值**时幂等返回既有 ref；已配置且**异值**时失败 ——
    * 不许静默覆盖（§3.4 逐字），客户端必须改走 `rotate`。
    */
-  set(input: {
-    ownerId: string;
-    kind: SecretKind;
-    plaintext: Uint8Array;
-  }): Promise<SecretRef>;
+  set(input: { ownerId: string; kind: SecretKind; plaintext: Uint8Array }): Promise<SecretRef>;
   rotate(input: {
     ownerId: string;
     kind: SecretKind;
@@ -429,7 +425,12 @@ export interface ProviderSessionHandle {
  */
 export type ProviderTurnEvent =
   | { readonly externalId: string; readonly kind: 'TEXT'; readonly text: string }
-  | { readonly externalId: string; readonly kind: 'FILE'; readonly path: string; readonly bytes: Uint8Array }
+  | {
+      readonly externalId: string;
+      readonly kind: 'FILE';
+      readonly path: string;
+      readonly bytes: Uint8Array;
+    }
   | { readonly externalId: string; readonly kind: 'OTHER' };
 
 export interface ProviderEventBatch {
@@ -515,7 +516,11 @@ export interface WorkArtifactStore {
     readonly body: Uint8Array;
     readonly contentType: string;
     readonly abortSignal: AbortSignal;
-  }): Promise<{ readonly objectRef: string; readonly sha256: ArtifactDigest; readonly byteLength: number }>;
+  }): Promise<{
+    readonly objectRef: string;
+    readonly sha256: ArtifactDigest;
+    readonly byteLength: number;
+  }>;
   /** 把已固化的产物打开成扫描输入。产物不存在 ⇒ `RESOURCE_NOT_FOUND`。 */
   openScanSource(objectRef: string): Promise<ScanFileSource>;
   read(objectRef: string): Promise<Uint8Array>;
