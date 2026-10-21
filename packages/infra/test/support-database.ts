@@ -78,6 +78,25 @@ const MISSING_DATABASE_HINT =
   '指向一个可以随意建库/删库的 Postgres（例如 postgres://USER@127.0.0.1:5432/postgres）。' +
   '刻意不降级成跳过：§9.2 规则 5 禁止用 skipIf 让门禁静默通过，被跳过的用例不会变红，只会消失。';
 
+/** DROP 前排干轮询的间隔。 */
+const DRAIN_POLL_INTERVAL_MS = 20;
+
+/**
+ * DROP 前排干的上限。
+ *
+ * 取 20 秒是被两个已知数夹出来的，不是随手写的：下界要**大于** `pg-pool` 的默认
+ * `idleTimeoutMillis = 10000` —— 万一某个测试漏了一个池没 `close()`，那些空闲 client
+ * 会在 10 秒时被池自己 `end()` 掉，等得到就还能正常收场；上界要**远小于** vitest 的
+ * `hookTimeout = 60_000`（`dispose()` 常在 `afterAll` 里跑），否则超时会先以
+ * "hook timed out" 的形式出现，把真正的原因埋掉。
+ *
+ * 自然排干实测中位数 12–14 ms；把机器压到 8× 超订（160 个忙循环 / 20 核）后最大值也
+ * 只有 97 ms（量法是进程外的 `pg_stat_activity` 轮询，数字见 ZLQ-227 的交付说明）。
+ * 20 秒对中位数留着三个数量级的余量，对那个最大值也还有两百倍；CI 的 4 核 runner
+ * 再慢一个量级也吃不满。
+ */
+const DRAIN_DEADLINE_MS = 20_000;
+
 export type TestDatabaseHarness = {
   readonly adapter: PostgresDatabaseAdapter;
   /** 已迁移完成的那个**新建**数据库的连接串。不含口令时也不打印它（连接串是部署期秘密）。 */
@@ -142,6 +161,86 @@ function withDatabase(baseUrl: string, databaseName: string): string {
 }
 
 /**
+ * 服务器侧还挂着几条连到这个库的后端。
+ *
+ * `baseSource` 连的是**默认库**（`postgres`），所以它自己的连接不会落进 `datname = $1`
+ * 这个过滤条件里 —— 不需要"排除自己"这种容易写错的特例。
+ *
+ * 可见性前提：非超级用户只能看见**同角色**的后端（`pg_stat_activity` 的权限规则）。
+ * 这条在这里成立，因为连到这个一次性库的所有连接都来自同一个连接串、同一个角色，
+ * 与 `baseSource` 用的是同一个。
+ */
+async function countDatabaseBackends(
+  source: SqlClientSource,
+  databaseName: string,
+): Promise<number> {
+  const client = await source.connect();
+  try {
+    const result = await client.query<{ readonly n: string }>(
+      'SELECT count(*)::text AS n FROM pg_stat_activity WHERE datname = $1',
+      [databaseName],
+    );
+    return Number(result.rows[0]?.n ?? '0');
+  } finally {
+    await client.release();
+  }
+}
+
+/**
+ * 等到服务器说"这个库上再没有后端了"，然后才允许 DROP。
+ *
+ * ## 为什么不能只等 `adapter.close()`
+ *
+ * `pg-pool@3.14.0` 的 `Pool.end()` 在它的 `_clients` 数组空掉时就 resolve，而
+ * `_remove()` 是**同步**清空那个数组、之后才**不 await** 地调 `client.end()`
+ * （`index.js:172-186`、`:133-145`、`:488-498`）。于是 `await adapter.close()` 返回时，
+ * `Client.end()` 写出去的那个 terminate 报文（`0x58`）可能还在路上，后端仍活着 ——
+ * 客户端的 `_ending: true, _ended: false` 就是这个中间态。紧接着的
+ * `DROP DATABASE … WITH (FORCE)` 会把它强杀，服务器回一条 FATAL `57P01`
+ * （`routine: ProcessInterrupts`）；那条错误落在一个**没人监听**的 pg client 上：
+ * `pg-pool` 给每个 client 挂了 `idleListener`，它把错误转成 `pool.emit('error', …)`，
+ * 而 `createPgClientSource` 没给 pool 注册 error 监听 ⇒ EventEmitter 直接抛 ⇒
+ * vitest 记一条 unhandled error ⇒ 全绿的 1794 条用例照样退出码 1（ZLQ-227）。
+ *
+ * ## 为什么判据是服务器，而不是"我以为我关完了"
+ *
+ * 「`datname = 这个库` 的后端数为 0」是 DROP 之后不可能再有连接被强杀的**充分**条件，
+ * 而且它对连接是**谁**建的不作任何假设：挂具自己的池、`secondaryAdapter` 的第二个池、
+ * 将来某个测试自建的第三个 source，一律同等对待。反过来，只去 await 某一个池的
+ * `end()`（哪怕它真的等到底）也覆盖不了 `postgres-drivers.test.ts` 里那些绕过挂具、
+ * 直接连同一个库的路径 —— 而这条修法必须对它们同样成立。
+ *
+ * ## 为什么超时了要**抛**，而不是照样 DROP
+ *
+ * 20 秒还没排干，说明有条连接既没被任何 `close()` 覆盖、也没被 `pg-pool` 的空闲回收
+ * 收走 —— 那是测试真的漏了连接，是个 bug。此时继续 `WITH (FORCE)` 等于把本函数要修的
+ * 那场竞态**每次**都重造一遍，而且造在一个更难查的位置上。抛出的消息带着库名、剩余
+ * 条数与已等时长，比一条不知道从哪来的 `57P01` 好查得多。
+ *
+ * 抛了会留下一个残留库，但残留库**不会**造成假绿：库名带 16 位随机 hex，下一轮不可能
+ * 撞上它，因此"迁移从零建出全部表"那条断言永远不会跑在一个已经建好的库上。
+ */
+async function waitForDatabaseBackendsToDrain(
+  source: SqlClientSource,
+  databaseName: string,
+): Promise<void> {
+  const startedAt = Date.now();
+  for (;;) {
+    const remaining = await countDatabaseBackends(source, databaseName);
+    if (remaining === 0) return;
+    const waitedMs = Date.now() - startedAt;
+    if (waitedMs >= DRAIN_DEADLINE_MS) {
+      throw new Error(
+        `一次性测试库 ${databaseName} 等了 ${waitedMs}ms 仍有 ${remaining} 条后端连着它，` +
+          '拒绝在这种状态下 DROP（那会重现 ZLQ-227 的 57P01 竞态）。' +
+          '请检查是否有连接没有被 dispose() 覆盖。',
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_INTERVAL_MS));
+  }
+}
+
+/**
  * 建一个一次性的**空**数据库。拿不到任何可用的 Postgres 时返回 `null`。
  *
  * **不在这里跑迁移**：迁移报告本身就是被测对象（首次应用 1 条、重跑应用 0 条、
@@ -190,6 +289,10 @@ export async function createTestDatabaseHarness(): Promise<TestDatabaseHarness> 
       databaseName,
       async dispose(): Promise<void> {
         await adapter.close();
+        // 关池**不等于**后端已经消失（`Pool.end()` 在 `client.end()` 还没落地时就
+        // resolve 了），所以这里再等一次服务器侧的事实，然后才 DROP。理由与实测见
+        // `waitForDatabaseBackendsToDrain` 的文件内说明。
+        await waitForDatabaseBackendsToDrain(baseSource, databaseName);
         const drop = await baseSource.connect();
         try {
           // `WITH (FORCE)`：本进程若还留着一条没归还的连接，普通 DROP 会因"库正在使用"
