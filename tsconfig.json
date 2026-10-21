@@ -3,6 +3,7 @@
   "files": [],
   "references": [
     { "path": "./packages/domain" },
+    { "path": "./packages/application" },
     { "path": "./packages/api-contract" },
     { "path": "./packages/work-contract" },
     { "path": "./packages/design-system" },

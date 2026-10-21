@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import { UNIT_ID as applicationUnitId } from '@littleq/application';
+import { unitManifest as domainManifest } from '@littleq/domain';
+
 import { UNIT_ID, unitManifest, unitReadiness } from '../src/index.js';
 
 import { describe, expect, it } from 'vitest';
@@ -23,8 +26,13 @@ describe('@littleq/infra 单元自述', () => {
     expect(unitManifest.layer).toBe('infra');
   });
 
-  it('跨包 workspace 引用可解析：infra 依赖 domain', () => {
-    expect(unitManifest.dependsOn).toEqual(['@littleq/domain']);
+  it('跨包 workspace 引用可解析：infra 依赖 domain 与 application', () => {
+    // 期望值取自**对方包自己的**常量，不是从 infra 的 src 回读 —— 后者会被实现自己带绿。
+    // 链接真断了，本文件顶部的两个 import 就会在加载期抛，用例连跑都跑不起来。
+    //
+    // `@littleq/application` 是 F1（ZLQ-220）加进来的：§3.5 的两个装配端口归它，
+    // infra 的 `PostgresTaskUnitOfWork` / `PostgresTaskPumpStore` 只是 `implements`。
+    expect(unitManifest.dependsOn).toEqual([domainManifest.unitId, applicationUnitId]);
   });
 });
 

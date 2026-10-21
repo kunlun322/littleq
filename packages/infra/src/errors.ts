@@ -49,6 +49,27 @@ export const INFRA_ERROR_CODES = [
   'SENSITIVE_URL_INVALID',
   // 任务租约（arch §6.1 的 lease 边；判据在 domain 的 policies/lease，秒数合法性在这里）
   'LEASE_TTL_OUT_OF_RANGE',
+  /**
+   * 按 id 找 `ai_tasks` / `task_private` 行，行不存在。
+   *
+   * 为什么单开一个内部码而不是复用 `OBJECT_NOT_FOUND`：后者在语义上是"Blob 里没有这个
+   * 对象"，把它用在数据库行上会让 §3.4 步骤 4「索引缺失的对象不能当作已校验产物放行」
+   * 那条读路径与任务读路径共用同一个码，日志里就分不出是哪一层没找到。公开形态则必须
+   * 与它一致 —— §4.1「别人的 project/task/events/preview 统一 `RESOURCE_NOT_FOUND`/404」，
+   * 而且**不含对象细节**：404 的 body 不能透出"这个 task 存在但不属于你"。
+   *
+   * 归属校验不在这里做（那是 F2 的用例），本码只表达"这一行不在库里"。
+   */
+  'TASK_NOT_FOUND',
+  /**
+   * 口令明文长度不在 domain 的 `PASSWORD_MIN_LENGTH..PASSWORD_MAX_LENGTH`（8..128）之内。
+   *
+   * 为什么不复用 `SECRET_PLAINTEXT_OUT_OF_RANGE`：那一个码绑定的是**凭据明文**的
+   * 1..8192（取自冻结契约 `SecretValue.maxLength`），与口令的 8..128 是两套完全不同的
+   * 边界。共用一个码会让日志里"一次 BYO 密钥太长"与"一次口令太短"长得一模一样，而这两
+   * 件事的处置方（部署侧配置 vs 终端用户输入）根本不同。
+   */
+  'PASSWORD_OUT_OF_RANGE',
   // SecretStore
   'MASTER_KEY_UNAVAILABLE',
   'MASTER_KEY_VERSION_MISMATCH',
@@ -60,6 +81,25 @@ export const INFRA_ERROR_CODES = [
   'SECRET_VERSION_CONFLICT',
   'SECRET_PURPOSE_MISMATCH',
   'SECRET_DECRYPT_FAILED',
+  /**
+   * 已应用的迁移在代码里被改写过（`schema_migrations.checksum` 与当前 `migrationChecksum`
+   * 不符）。ZLQ-216 §3.2：「迁移 runner 按版本/checksum 执行」—— checksum 存下来却不
+   * 校验就等于没存，两个环境的 schema 会静默分叉。它**不可重试**：重跑同一条迁移只会
+   * 得到同一个不符，必须由人决定是回滚代码还是新开一条迁移。
+   */
+  'MIGRATION_CHECKSUM_MISMATCH',
+  /**
+   * 读出来的行自相矛盾：派生列与 `payload jsonb` 里经构造器重建的实体不一致，或列值的
+   * 形状不是本层写进去的形状（`bigint` 读成了非数字、`timestamptz` 读成了非 Date 等）。
+   *
+   * ZLQ-216 §3.1：「独立列从验证后的实体派生，仓储读取时**检查一致性**。」检查出来
+   * 不一致时必须报错而不是挑一个信：派生列是唯一索引/CAS 的依据，payload 是权威值，
+   * 两者分叉意味着有人绕过仓储直接改过库 —— 继续跑就会用错的 `revision` 做 CAS，
+   * 把一个已经推进过的任务当成旧版本覆盖掉。
+   *
+   * 它**不可重试**：重读同一行只会得到同一个矛盾。
+   */
+  'STORED_ROW_INCONSISTENT',
 ] as const;
 
 export type InfraErrorCode = (typeof INFRA_ERROR_CODES)[number];
@@ -102,6 +142,8 @@ const PUBLIC_ERROR_CODE: Readonly<Record<InfraErrorCode, ErrorCode>> = {
   OBJECT_READ_CONCURRENCY_LIMIT: 'RATE_LIMITED',
   SENSITIVE_URL_INVALID: 'INTERNAL_ERROR',
   LEASE_TTL_OUT_OF_RANGE: 'REQUEST_INVALID',
+  PASSWORD_OUT_OF_RANGE: 'REQUEST_INVALID',
+  TASK_NOT_FOUND: 'RESOURCE_NOT_FOUND',
   MASTER_KEY_UNAVAILABLE: 'INTERNAL_ERROR',
   MASTER_KEY_VERSION_MISMATCH: 'INTERNAL_ERROR',
   SECRET_CONTEXT_INVALID: 'REQUEST_INVALID',
@@ -112,6 +154,8 @@ const PUBLIC_ERROR_CODE: Readonly<Record<InfraErrorCode, ErrorCode>> = {
   SECRET_VERSION_CONFLICT: 'REVISION_CONFLICT',
   SECRET_PURPOSE_MISMATCH: 'REQUEST_INVALID',
   SECRET_DECRYPT_FAILED: 'INTERNAL_ERROR',
+  MIGRATION_CHECKSUM_MISMATCH: 'INTERNAL_ERROR',
+  STORED_ROW_INCONSISTENT: 'INTERNAL_ERROR',
 };
 
 /**
@@ -166,12 +210,20 @@ export class InfraError extends Error {
   }
 }
 
-/** grant 过期后重试同一个 token 不可能成功，必须重新签发 —— 覆盖公开码的默认推导。 */
+/**
+ * 「同一请求重试也不会变好」的内部码 —— 覆盖公开码的默认 `retryable` 推导。
+ *
+ * grant 过期后重试同一个 token 永远失败，必须让主站重新签发；迁移 checksum 不符同理，
+ * 重跑同一条迁移只会得到同一个不符，必须由人裁决。两者的共同点是：**重试不是补救，
+ * 只是把同一个失败再付一次费**。行自相矛盾也一样 —— 重读同一行只会读到同一个矛盾。
+ */
 const NON_RETRYABLE_CODES: ReadonlySet<InfraErrorCode> = new Set<InfraErrorCode>([
   'OBJECT_READ_GRANT_EXPIRED',
   'OBJECT_READ_GRANT_REVOKED',
   'OBJECT_READ_GRANT_UNKNOWN',
   'GRANT_AUDIENCE_MISMATCH',
+  'MIGRATION_CHECKSUM_MISMATCH',
+  'STORED_ROW_INCONSISTENT',
 ]);
 
 export function infraError(code: InfraErrorCode, context: InfraErrorContext = {}): InfraError {

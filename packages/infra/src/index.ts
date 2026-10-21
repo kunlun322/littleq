@@ -7,17 +7,35 @@
  * 的端口契约在 `ports/*`，Vercel Blob（private）驱动在 `drivers/*`，可注入的内存替身在
  * `reference-backends.ts` 与各 `memory*.ts`。
  *
+ * ZLQ-220（F1）在此之上补 `sql/*`：§3.2 的全部表与索引、真 Postgres 驱动、§3.3 的
+ * `BlobDigestIndex`、以及 §3.5 两个**装配端口**（`TaskPumpStore` / `TaskUnitOfWork`，
+ * 契约在 `@littleq/application`）的生产实现。**五个冻结端口的签名一字未改**（§3.5：
+ * 「本期不改这份冻结端口签名」）；新增的只是它们的实现与 §3.5 点名要新增的那两个端口。
+ *
  * 边界（ZLQ-153 §1.3 / §5）——由 `config/dependency-graph.json` 强制：
  *
  * - infra 不包含业务分支；所有 SDK 类型停在本层，不外泄到 domain。
  * - `domain-and-application-no-drivers`（§5.4(4)）禁止 domain / application 导入 `drivers/*`，
  *   即本层的驱动目录只能由组合根（apps/*）在装配时触达。
+ *   ⚠️ 该规则匹配的是路径里含 `drivers` / `driver` 目录段的导入（glob 写法本身含注释
+ *   终止符，此处不逐字抄），**不覆盖 `sql/`**。F1 没有
+ *   自授「把规则扩到 `sql/`」的权限（`config/dependency-graph.json` 不在 §10.2 的 F1
+ *   文件面里），所以这条缺口按 §10.2 的收尾规则申报，等裁定。当前它不构成实际漏洞：
+ *   `packages/application` 一个 import 都不指向 infra（`tsc -b` 的项目引用也不允许，
+ *   否则成环），漂移由 `packages/application` 的依赖清单只有两个 workspace 包这一事实
+ *   兜住。
  *
  * ## grant 机制**不是**第六个端口
  * `ObjectReadGrantService` 是应用语义，它**消费** `ObjectStore` 而不是与它并列（ZLQ-201
  * 裁定一 §2）。所以它在 `grant/` 而不在 `ports/`，也不进 `five-port-contract` 的五端口计数
  * —— 那个测试会对着 `ports/` 目录的实际条目数断言「恰好五个」。
+ *
+ * 同理，§3.5 的两个装配端口也**不在** `ports/`：它们是应用层的装配契约，归属
+ * `@littleq/application`（§10.2：「application 内部由 F1 拥有 ports」），infra 只
+ * `implements` 它们。把它们的类型文件放进 `ports/` 会让那个"恰好五个"的断言变成六，
+ * 而 §9.2 明令「不把已存在五端口说成全链路已证明」—— 计数本身就是那条禁令的看守。
  */
+import { UNIT_ID as applicationUnitId } from '@littleq/application';
 import { unitManifest as domainManifest } from '@littleq/domain';
 
 export { EnvValidationError, defineEnv, loadEnvFile } from './env.js';
@@ -184,6 +202,62 @@ export type {
   VercelBlobObjectStoreOptions,
 } from './drivers/vercel-blob.js';
 
+/**
+ * 生产 SQL 驱动（ZLQ-216 §3.2 / §3.3 / §3.5，本单 F1）。
+ *
+ * 与上面的内存替身分开成一组，因为二者用途不同：内存替身是**测试与本地开发**的参考
+ * 后端，这一组是**部署**时由组合根装配的实现。它们实现的是同一批冻结端口，签名一字
+ * 未改（§3.5：「本期不改这份冻结端口签名」）。
+ *
+ * ## 两种构造方式，差别不是风格而是语义
+ *
+ * - `PostgresDatabaseAdapter` 用公开构造器：它自己**就是**连接与事务的源头
+ *   （`DatabaseAdapter.transaction` 的提供者），没有"已在途的事务"可绑。
+ * - 其余驱动一律 `private constructor` + 两个静态工厂 `of(db)` / `bound(tx)`：执行语境
+ *   只有"整个适配器"与"某个已在途的事务"两种合法来源。做成公开构造器会让调用方能拼出
+ *   第三种语境，而那种语境下的"回滚"无从定义。
+ * - `PostgresTaskUnitOfWork` 是**唯一**没有 `bound` 的：它本身就是事务边界（§3.5 的
+ *   `createTurn` / `run` 各开一个短事务）。再给它一层 `bound` 会让"回滚"要么退化成端口
+ *   里并不存在的 savepoint，要么变成把外层事务一并撤掉 —— 两者都不是调用方同意的语义。
+ *
+ * ## 迁移没有单独的 runner 出口
+ *
+ * `PostgresDatabaseAdapter.migrate()` 就是它，返回端口既有的 `MigrationReport`。
+ * `SQL_MIGRATIONS` / `migrationChecksum` / `SLICE_TABLE_NAMES` 之所以也导出，是为了让
+ * 受控初始化工具与「schema 钉住」测试引用**同一份**清单，而不是各抄一遍 DDL ——
+ * 抄两遍的结果是 checksum 对得上、表结构却悄悄分叉。
+ */
+export { PostgresDatabaseAdapter } from './sql/postgres-adapter.js';
+export type { PostgresDatabaseAdapterOptions } from './sql/postgres-adapter.js';
+export { createNeonClientSource, createPgClientSource } from './sql/sources.js';
+export type { SqlClientSourceOptions } from './sql/sources.js';
+export { uniqueViolationConstraint } from './sql/client.js';
+export type { SqlClient, SqlClientSource, SqlQueryResult } from './sql/client.js';
+export type { SqlExecutor } from './sql/executor.js';
+export {
+  MIGRATION_ADVISORY_LOCK_KEY,
+  SCHEMA_MIGRATIONS_BOOTSTRAP_DDL,
+  SLICE_TABLE_NAMES,
+  SQL_MIGRATIONS,
+  migrationChecksum,
+} from './sql/migrations.js';
+export type { SliceTableName, SqlMigration } from './sql/migrations.js';
+export { newUuidV7, unixTsMsOfUuidV7 } from './sql/uuidv7.js';
+
+export { PostgresBlobDigestIndex } from './sql/blob-digest-index.js';
+export { PostgresGrantRecordStore } from './sql/grant-records.js';
+export { PostgresSecretRecordStore } from './sql/secret-records.js';
+export { PostgresTaskRepository } from './sql/task-repository.js';
+export { PostgresTaskPumpStore } from './sql/task-pump-store.js';
+export { PostgresTaskUnitOfWork } from './sql/task-unit-of-work.js';
+export { PostgresRuntimePublisher, hashTicketToken } from './sql/runtime-publisher.js';
+export type {
+  IssuePreviewGrantInput,
+  IssuedPreviewGrant,
+  PostgresRuntimePublisherOptions,
+  RuntimePreviewGrantIssuer,
+} from './sql/runtime-publisher.js';
+
 export {
   InMemoryDatabaseAdapter,
   InMemoryRuntimePublisher,
@@ -224,7 +298,15 @@ export const unitManifest: UnitManifest = {
   layer: 'infra',
   spec: 'ZLQ-153 §1.3 packages/infra',
   skeletonOnly: false,
-  dependsOn: [domainManifest.unitId],
+  /**
+   * `@littleq/application` 出现在这张"下层单元"表里，看着像分层写反了，其实不是：
+   * 它是 §3.5 两个装配端口的**契约归属**，infra 的 `PostgresTaskUnitOfWork` /
+   * `PostgresTaskPumpStore` 是 `implements` 它的（依赖倒置）。字段注释说的"下层"指
+   * 分层图上的方向，而本字段的**用途**是「供组合根启动自检」—— 组合根要装配这两个
+   * 驱动，就必须两个包都在场。漏掉它的后果不是编译错误（`package.json` 已经声明了），
+   * 而是自检会在端口契约缺失时照样报 infra 就绪。
+   */
+  dependsOn: [domainManifest.unitId, applicationUnitId],
 };
 
 /**

@@ -26,6 +26,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "3.1152.0",
     "@aws-sdk/s3-request-presigner": "3.1152.0",
+    "@littleq/application": "workspace:*",
     "@littleq/domain": "workspace:*",
     "@neondatabase/serverless": "1.2.0",
     "@vercel/blob": "2.8.2",

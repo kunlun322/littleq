@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./scan": {
+      "types": "./dist/scan/index.d.ts",
+      "node": "./dist/scan/index.js"
     }
   },
   "files": [

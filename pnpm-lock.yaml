@@ -287,6 +287,15 @@ importers:
         specifier: 6.0.2
         version: 6.0.2(zod@4.6.7)
 
+  packages/application:
+    dependencies:
+      '@littleq/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@littleq/work-contract':
+        specifier: workspace:*
+        version: link:../work-contract
+
   packages/design-system: {}
 
   packages/domain: {}
@@ -299,6 +308,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: 3.1152.0
         version: 3.1152.0
+      '@littleq/application':
+        specifier: workspace:*
+        version: link:../application
       '@littleq/domain':
         specifier: workspace:*
         version: link:../domain
