@@ -270,6 +270,41 @@ export interface TaskRetryStore {
   }): Promise<AiTask | null>;
 }
 
+/**
+ * 取消路径的额度**释放**：把 `(taskId, capability)` 那一行预留置为 `RELEASED`。
+ *
+ * ## 为什么它也不在 F1 的 `TaskUnitOfWork` 里
+ *
+ * `TaskTransactionReservations` 只有 `reserve` 与 `settle` 两个方法，而 `settle` 在实现侧
+ * 有 `assertSettleable`（`packages/infra/src/sql/usage-rows.ts:192`）：
+ * `isReservationActive(r) || r.state !== 'COMMITTED'` 就抛错。也就是说**这个端口在语义上
+ * 只能"提交"，不能"释放"** —— 拿一个 `RELEASED` 实体去调 `settle` 会被 infra 当场拒掉。
+ * `reserve` 也不行：它是 `INSERT … ON CONFLICT (task_id, capability) DO NOTHING`，对已存在
+ * 的那一行什么都不写。所以释放在 F1 的端口里**没有入口**，只能由 F2 自己开一个，
+ * 与 `TaskRetryStore` 同一个理由、同一个自然键 UPSERT 机制。
+ *
+ * ## 为什么它可以发生在取消事务**之外**（§3.5 的原子性要求不适用于它）
+ *
+ * §3.5 逐字：「**不能在版本提交失败后单独完成结算**」。它约束的是**结算**——扣学生的额度。
+ * 结算若独立提交，版本回滚之后钱已经扣掉，账与作品对不上，那是不可逆的损害。
+ * 释放是相反方向的动作：它只会把额度**还回去**。因此"取消已提交而释放没跑完"这个中间态
+ * 的后果是"这一格额度暂时还被占着"，不是"学生被多扣了一次"。两种损害的等级不同，
+ * 用同一把事务锁去防后者是过度约束，而前者的兜底本来就在（`expiresAt` = 硬截止）。
+ *
+ * ⚠️ 因此实现必须**幂等**：同一个 `(taskId, capability)` 重复调用得到同一个结果，
+ * 不得追加第二行（唯一索引也在 DB 侧兜着）。
+ */
+export interface TaskReservationReleaser {
+  /**
+   * @returns 落库后的预留实体；该行不存在时返回 `null`（受理阶段没预留过的不计量任务）。
+   */
+  releaseReservation(input: {
+    readonly taskId: TaskId;
+    readonly capability: Capability;
+    readonly now: Timestamp;
+  }): Promise<UsageReservation | null>;
+}
+
 // ---------------------------------------------------------------------------
 // 秘密（BYO 凭据）
 // ---------------------------------------------------------------------------

@@ -92,6 +92,49 @@ export const TURN_TASK_KIND = 'VIBE_TURN' as const;
  */
 export const TURN_RESERVED_UNITS = 1;
 
+/**
+ * 预留行标识 = `(taskId, capability)` 的确定性 UUIDv7 **形状**串。
+ *
+ * ## 为什么不是 `random.uuidV7()`
+ *
+ * `usage_reservations` 上有 `UNIQUE (task_id, capability)`
+ * （`packages/infra/src/sql/migrations.ts:396`）—— 一个 task 的一个 capability **只有一行**。
+ * 也就是说 `(taskId, capability)` 已经是这行的自然键，而 `id` 只是它的代理键。用随机
+ * UUIDv7 当代理键会让自然键与代理键**互相不可推导**，代价在提交切片上立刻显形：
+ * `TaskTransactionReservations.settle` 的 SQL 是
+ * `UPDATE … WHERE id = $1 AND task_id = $2`（`packages/infra/src/sql/usage-rows.ts:96`），
+ * 而 F1 的端口**没有**读预留的方法，`TaskPrivateRecord` 也没有存这个 id 的列。于是
+ * COMMITTING 切片手里只有一个 task，拿不到那个随机 id，结算就无法进行。
+ *
+ * 让代理键等于自然键的哈希，结算方便可由 `(task, capability)` 重新算出同一个 id，
+ * 不需要动 F1 的任何端口形状，也仍然满足 §3.5「不能在版本提交失败后单独完成结算」
+ * ——结算照旧发生在写版本的**同一个事务**里。
+ *
+ * ## 代价（已声明）
+ *
+ * 这个 id **不再时间有序**，而 UUIDv7 被选中的理由正是时间有序（ZLQ-153 §4.2）。
+ * `usage_reservations` 的访问路径是主键点查与 `(task_id, capability)` 唯一索引，
+ * 没有按 id 排序的查询，所以功能上无损；但"主键统一 UUIDv7"这条约定的**意图**
+ * 在这里被削弱了。已在交付评论里列为申报项，请架构师裁定是否改为给
+ * `TaskTransactionReservations` 增一个 `findReservation(taskId, capability)`。
+ *
+ * `UUID_V7_PATTERN`（`packages/domain/src/value-objects/identifiers.ts:12`）只校验形状：
+ * 32 位小写十六进制、第 13 位为 `7`、第 17 位为 `8/9/a/b`。下面按位强制这两位。
+ */
+export function reservationIdentity(input: {
+  readonly random: RandomSource;
+  readonly taskId: TaskId;
+  readonly capability: Capability;
+}): string {
+  const digest = input.random.sha256(`${input.taskId}\u0000${input.capability}`);
+  const hex = [...digest.subarray(0, 16)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+  const variant = ((Number.parseInt(hex[16] as string, 16) & 0x3) | 0x8).toString(16);
+  const fixed = `${hex.slice(0, 12)}7${hex.slice(13, 16)}${variant}${hex.slice(17)}`;
+  return `${fixed.slice(0, 8)}-${fixed.slice(8, 12)}-${fixed.slice(12, 16)}-${fixed.slice(16, 20)}-${fixed.slice(20)}`;
+}
+
 /** 计量周期。契约的 `usageLimits` 只有 DAILY / MONTHLY 两档，回合按日计。 */
 export const TURN_USAGE_PERIOD = 'DAILY' as const;
 
@@ -256,7 +299,7 @@ export async function createTurnUseCase(
   });
 
   const reservation = createUsageReservation({
-    id: services.random.uuidV7(),
+    id: reservationIdentity({ random: services.random, taskId, capability }),
     taskId,
     subjectUserId: studentId,
     capability,
