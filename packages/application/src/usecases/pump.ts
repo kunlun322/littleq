@@ -952,7 +952,12 @@ function commitSlice(
         });
         return saveWithEvent(bound, {
           task: completeTask(staged, String(version.id), drive.now),
-          expectedRevision: staged.revision,
+          // CAS 的期望值必须来自**这一片开头读到的那一行**（revision S），而不是内存里
+          // 已经自增过两次的 `staged`（S+2）：`bound.tasks.save` 拿它去和库里的行比对，
+          // 而库里此刻仍是 S。写 `staged.revision` 会让每一次成功提交都撞上
+          // `REVISION_CONFLICT`——而且只在这条路径上撞，编译期看不出来，
+          // 只有 `test/pump.test.ts` 那条六片推进的用例能钉住它。
+          expectedRevision: current.revision,
           sequence,
           eventType: 'COMPLETED',
           safePayload: { stage: 'INTERNAL', versionId: String(version.id) },
