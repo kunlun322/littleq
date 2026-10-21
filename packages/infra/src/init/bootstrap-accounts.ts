@@ -83,7 +83,7 @@ export const DATABASE_URL_ENV_VAR = 'LITTLEQ_DATABASE_URL';
  * 环境里与 LittleQ 毫无关系的变量（CI 的 `GITHUB_PASSWORD`、数据库自己的 `PGPASSWORD`），
  * 让工具在一个完全正常的机器上拒绝启动，而"拒绝启动"是个没有任何诊断信息的死路。
  */
-const FORBIDDEN_PASSWORD_ENV_VARS = [
+export const FORBIDDEN_PASSWORD_ENV_VARS = [
   'LITTLEQ_PASSWORD',
   'LITTLEQ_OWNER_PASSWORD',
   'LITTLEQ_STUDENT_PASSWORD',
@@ -114,9 +114,24 @@ export const BOOTSTRAP_REFUSAL_REASONS = [
   'ACCOUNTS_ALREADY_EXIST',
   /** 两个登录名之一（按 `lower()` 判定）已存在。 */
   'LOGIN_NAME_TAKEN',
-  /** 两次输入不一致。 */
-  'PASSWORD_CONFIRM_MISMATCH',
-  /** 连续三次不一致或长度不合法：放弃，不让它变成一次离线爆破式的反复尝试。 */
+  /**
+   * 本次要建的两个账号自己撞名（按 `loginNameKey` 判定，所以 `Owner` 与 `owner` 也算）。
+   *
+   * 与 `LOGIN_NAME_TAKEN` 分开，因为两者的可达条件与操作者的处置完全不同：那一条要求库里
+   * 已有同名行，而本工具的前置是**库为空**，所以它在串行路径上到不了（只服务并发）；
+   * 这一条则纯粹是命令行写错了，且必须在读口令**之前**就报出来 —— 否则操作者先输两遍
+   * 口令，再收到一条驱动原文的 23505（`users_login_name_key`），既不知道错在哪，也已经
+   * 白付了最贵的那步。
+   */
+  'LOGIN_NAME_SELF_COLLISION',
+  /**
+   * 连续三次「两次输入不一致」或长度不合法：放弃，不让它变成一次离线爆破式的反复尝试。
+   *
+   * 这里**没有**一个单独的 `PASSWORD_CONFIRM_MISMATCH`：不一致是可重试的输入错误，而
+   * 隐藏输入下操作者看不见自己打了什么，所以第一次就终止等于把一个可恢复的键入错误升级成
+   * 一次失败的部署。三次都失败才放弃，而放弃的理由只有一个码 —— 与 `verifyPassword`
+   * 只有「是/否」同理：区分「第几次失败」与「哪种失败」都是在给外面一个 oracle。
+   */
   'PASSWORD_TOO_MANY_ATTEMPTS',
 ] as const;
 
@@ -150,20 +165,19 @@ const MAX_PASSWORD_ATTEMPTS = 3;
  *
  * 长度不合法时只说边界，不回显输入。
  */
-async function readConfirmedSecret(
-  readSecret: SecretReader,
-  label: string,
-): Promise<string> {
+async function readConfirmedSecret(readSecret: SecretReader, label: string): Promise<string> {
   for (let attempt = 1; attempt <= MAX_PASSWORD_ATTEMPTS; attempt += 1) {
     const first = await readSecret(`${label} 口令（输入不回显，长度 8–128）: `);
     const second = await readSecret(`${label} 口令，再输入一次: `);
     if (first !== second) {
-      if (attempt === MAX_PASSWORD_ATTEMPTS) throw new BootstrapRefused('PASSWORD_TOO_MANY_ATTEMPTS');
+      if (attempt === MAX_PASSWORD_ATTEMPTS)
+        throw new BootstrapRefused('PASSWORD_TOO_MANY_ATTEMPTS');
       process.stdout.write('两次输入不一致，请重新输入。\n');
       continue;
     }
     if (first.length < 8 || first.length > 128) {
-      if (attempt === MAX_PASSWORD_ATTEMPTS) throw new BootstrapRefused('PASSWORD_TOO_MANY_ATTEMPTS');
+      if (attempt === MAX_PASSWORD_ATTEMPTS)
+        throw new BootstrapRefused('PASSWORD_TOO_MANY_ATTEMPTS');
       process.stdout.write('长度不在 8–128 之内，请重新输入。\n');
       continue;
     }
@@ -181,17 +195,30 @@ async function readConfirmedSecret(
  *
  * 哈希在**进事务之前**就算好：scrypt 基线一次是几十到上百毫秒，两次就是一段不必要的事务
  * 持有时间，而它并不需要数据库。代价是拒绝路径上白算一次哈希 —— 无害。
+ *
+ * 而**便宜的校验一律排在读口令之前**，理由与 `main()` 里那条相同：登录名写错却先让人
+ * 输两遍口令再报错，等于把一次可避免的失败安排在了最贵的操作之后。同名的两个登录名
+ * （`Owner` 与 `owner` 也算，判定用 `loginNameKey`）在这里就被拒掉 —— 否则两条
+ * `assertLoginNameFree` 都会通过（库是空的），然后第二条 `USER_INSERT_SQL` 撞上
+ * `users_login_name_key`，操作者拿到的是一条驱动原文的 23505 而不是一个结构化的拒绝理由。
  */
 export async function bootstrapAccounts(
   adapter: DatabaseAdapter,
   input: BootstrapAccountsInput,
   readSecret: SecretReader,
 ): Promise<BootstrapAccountsResult> {
+  const ownerLoginName = parseLoginName(input.ownerLoginName);
+  const studentLoginName = parseLoginName(input.studentLoginName);
+  const ownerNickname = parseNickname(input.ownerNickname);
+  const studentNickname = parseNickname(input.studentNickname);
+  const studentAgeBand = parseAgeBand(input.studentAgeBand);
+  if (loginNameKey(ownerLoginName) === loginNameKey(studentLoginName)) {
+    throw new BootstrapRefused('LOGIN_NAME_SELF_COLLISION');
+  }
+
   const ownerPassword = await readConfirmedSecret(readSecret, '成人（OWNER）');
   const studentPassword = await readConfirmedSecret(readSecret, '学生（STUDENT）');
 
-  const ownerLoginName = parseLoginName(input.ownerLoginName);
-  const studentLoginName = parseLoginName(input.studentLoginName);
   const ownerId = newUuidV7();
   const studentId = newUuidV7();
 
@@ -199,7 +226,7 @@ export async function bootstrapAccounts(
     id: ownerId,
     role: 'OWNER',
     loginName: ownerLoginName,
-    nickname: parseNickname(input.ownerNickname),
+    nickname: ownerNickname,
     ageBand: null,
     status: 'ACTIVE',
     ownerId: null,
@@ -212,8 +239,8 @@ export async function bootstrapAccounts(
     id: studentId,
     role: 'STUDENT',
     loginName: studentLoginName,
-    nickname: parseNickname(input.studentNickname),
-    ageBand: input.studentAgeBand,
+    nickname: studentNickname,
+    ageBand: studentAgeBand,
     status: 'ACTIVE',
     ownerId: owner.id,
     lockPolicy: input.lockPolicy,
@@ -231,7 +258,10 @@ export async function bootstrapAccounts(
     await assertLoginNameFree(tx, loginNameKey(studentLoginName));
 
     await tx.execute(USER_INSERT_SQL, userInsertParams(owner));
-    await tx.execute(PASSWORD_CREDENTIAL_INSERT_SQL, credentialInsertParams(owner.id, ownerCredential));
+    await tx.execute(
+      PASSWORD_CREDENTIAL_INSERT_SQL,
+      credentialInsertParams(owner.id, ownerCredential),
+    );
     await tx.execute(USER_INSERT_SQL, userInsertParams(student));
     await tx.execute(
       PASSWORD_CREDENTIAL_INSERT_SQL,
@@ -287,7 +317,7 @@ async function readHiddenLine(prompt: string): Promise<string> {
   }
 }
 
-type CliOptions = {
+export type CliOptions = {
   readonly migrateOnly: boolean;
   readonly input: BootstrapAccountsInput;
 };
@@ -300,12 +330,17 @@ function argValue(argv: readonly string[], flag: string): string | null {
   return argv[index + 1] ?? null;
 }
 
-function parseArgv(argv: readonly string[]): CliOptions {
+/**
+ * 解析命令行。导出是为了让「口令类 argv 被拒绝」这条结构性保证**可被单元测试钉住** ——
+ * 它原先只存在于文件头的散文里，而散文不会判红。
+ *
+ * 刻意**不**加进 `src/index.ts` 的桶导出：CLI 的参数形状不是 infra 的公开 API，进桶等于
+ * 把 §10.2 的治理面扩大一圈。测试用深路径 import（本仓既有风格）。
+ */
+export function parseArgv(argv: readonly string[]): CliOptions {
   for (const entry of argv) {
     if (FORBIDDEN_PASSWORD_ARG_PATTERN.test(entry)) {
-      throw new Error(
-        '口令不能经命令行传入（§1.3）。本命令只从隐藏输入读取口令；请移除该参数。',
-      );
+      throw new Error('口令不能经命令行传入（§1.3）。本命令只从隐藏输入读取口令；请移除该参数。');
     }
   }
   const migrateOnly = argv.includes('--migrate-only');
