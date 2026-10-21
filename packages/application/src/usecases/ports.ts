@@ -256,6 +256,37 @@ export interface TurnAcceptanceRecord {
  * 构造函数直接造一个 `HELD` 实体来表达，绕过了状态迁移函数（本单不改 domain，故只能如此）。
  * 账目本身不丢：真正记账的是 `usage_ledger`（append-only、`event_key UNIQUE`），预留行
  * 只是并发占位的凭证。
+ *
+ * ## 🚨 安全红线（PM 裁定 (b).1，**不可协商**）
+ *
+ * > 重新持有只在 `RELEASED` / `EXPIRED` 上合法；`COMMITTED` 必须被拒绝，且这一条拒绝
+ * > 必须有真实测试覆盖。
+ *
+ * 绕过迁移函数的那一刻，domain 就再也拦不住任何人把一行 `COMMITTED` 改回 `HELD` —— 而
+ * `COMMITTED` 表示那一格额度已经真的花掉并记进 `usage_ledger` 了。把它重新置为 `HELD`
+ * 等于让学生用同一格额度跑第二次付费生成，账目上却只有一条，对账时看不出来。
+ *
+ * **执行点只能是实现**，用例自己调不了：`UsageDirectory` 没有读预留的方法，`retryTaskUseCase`
+ * 交出的只是一个用构造函数新造的、`id` 随机的 `HELD` 实体，它**不知道库里那一行现在是什么
+ * 状态**。因此每一个 `TaskRetryStore` 实现，在按自然键 `(task_id, capability)` UPSERT
+ * **之前**，必须先 `SELECT` 出库里那一行并交给 `assertReholdable`（`usecases/tasks.ts`）：
+ *
+ * ```ts
+ * const existing = await readReservation(tx, input.task.id, capability); // 库里那一行
+ * assertReholdable(existing); // HELD / COMMITTED ⇒ 抛 REQUEST_INVALID: UsageReservation.state
+ * await upsertReservation(tx, { ...existing, id: existing.id }, input.reservation);
+ * ```
+ *
+ * 拒绝抛出的错误码是 **400 `REQUEST_INVALID`（值对象名 `UsageReservation.state`）**，
+ * 不是 409：409 的语义是"拿新的 ETag 再来一次"，而这里的失配与 revision 无关（revision
+ * 完全可能对得上），客户端照着 409 重试只会无限循环。同一张表上 infra 侧的
+ * `assertSettleable`（`packages/infra/src/sql/usage-rows.ts:192`）用的是同一个错误码、
+ * 同一个值对象名，两道守卫因此说同一种语言。
+ *
+ * `retryTaskUseCase` 对 `beginRetryAttempt` **不做 try/catch**，所以实现抛出的拒绝会原样
+ * 传到 HTTP 层：不落新 attempt、不动账目、不改 task 行。
+ * `packages/application/test/task-retry-rehold.test.ts` 钉死以上全部，并附一个反面对照
+ * （一个**不调** `assertReholdable` 的实现确实能成功 ⇒ 证明那条测试不是恒绿）。
  */
 export interface TaskRetryStore {
   /**

@@ -30,6 +30,7 @@ import {
   DomainError,
   hardDeadlineAt,
   HARD_DEADLINE_MINUTES,
+  isReservationActive,
   parseTaskId,
   type AiTask,
   type Capability,
@@ -38,6 +39,7 @@ import {
   type TaskEvent,
   type TaskId,
   type Timestamp,
+  type UsageReservation,
   type UserId,
 } from '@littleq/domain';
 import type { Actor } from './authorization.js';
@@ -135,6 +137,45 @@ export interface RetryTaskResult {
 
 /** 重试预留的单位数与首次受理相同：一个 attempt 一次生成。 */
 const RETRY_RESERVED_UNITS = 1;
+
+/**
+ * 「重新持有」唯一的准入判定 —— PM 裁定 (b).1 的安全红线，**不可协商**：
+ * 重新持有只在 `RELEASED` / `EXPIRED` 上合法，`COMMITTED` 必须被拒绝。
+ *
+ * ## 为什么必须有这一道，而不是让 domain 的迁移函数挡住
+ *
+ * domain 没有 `RELEASED → HELD` 这条边（`TERMINAL_RESERVATION_STATES` 三个值全是终态），
+ * 所以"重新持有"只能用 `createUsageReservation` 直接造一个 `HELD` 实体来表达 —— 而构造
+ * 函数**不知道库里那一行现在是什么状态**。换句话说：绕过迁移函数的那一刻，domain 就
+ * 再也拦不住任何人把一个 `COMMITTED` 的预留改回 `HELD`。这一道就是补上那个缺口。
+ *
+ * 后果若没有它：`COMMITTED` 表示这一格额度已经真的花掉并记进 `usage_ledger` 了。把它
+ * 重新置为 `HELD` 等于让学生用同一格额度跑第二次生成，而账目上只有一条 —— 白送一次
+ * 付费调用，且对账时看不出来。
+ *
+ * ## 为什么错误码是 400 而不是 409
+ *
+ * 409 `REVISION_CONFLICT` 的语义是"拿新的 ETag 再来一次"。可这里的失配与 revision 无关
+ * （revision 完全可能对得上），客户端照着 409 重试只会**无限循环**。`REQUEST_INVALID`
+ * 说的是"这一行现在的状态根本不允许这个操作"，与 infra 侧 `assertSettleable`
+ * （`packages/infra/src/sql/usage-rows.ts:192`）对同一张表用的是同一个错误码、同一个
+ * 值对象名 —— 两道守卫因此说同一种语言。
+ *
+ * ## 谁必须调它
+ *
+ * `TaskRetryStore.beginRetryAttempt` 的**每一个实现**，在按自然键
+ * `(task_id, capability)` UPSERT 之前，先读出库里那一行并交给本函数。用例自己调不了：
+ * `UsageDirectory` 没有读预留的方法，它交出的只是一个新造的 `HELD` 实体。
+ * `packages/application/test/task-retry-rehold.test.ts` 把四个状态逐一钉死，并证明
+ * `retryTaskUseCase` 会把实现抛出的拒绝**原样传出**（不吞、不落新 attempt、不动账目）。
+ */
+export function assertReholdable(existing: UsageReservation): void {
+  // `isReservationActive` 就是 `state === 'HELD'`：一个已经被别的请求持有的预留，
+  // 同样不能由重试抢回来（那会绕过 pump 的单飞锁）。
+  if (isReservationActive(existing) || existing.state === 'COMMITTED') {
+    throw DomainError.invalid('UsageReservation.state');
+  }
+}
 
 /**
  * `POST /tasks/{id}:retry` —— **同一个 task 的新 attempt**，不是新建 task（契约原文），
