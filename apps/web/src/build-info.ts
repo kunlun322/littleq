@@ -2,9 +2,24 @@
  * 构建期站点身份（ZLQ-190 §7 D5）。
  *
  * 只在**服务端**的 Server Component 里调用：ZLQ-232 起 `apps/web` 是服务构建，静态页在
- * `next build` 时于 Node 中预渲染、动态页在请求时于 Node 中渲染，两种情况这里都能用
- * `git` 与环境变量。客户端 bundle 不包含本模块（`src/index.ts` 与任何 `'use client'` 组件
- * 都不 import 它）。
+ * `next build` 时于 Node 中预渲染、动态页在请求时于 Node 中渲染。客户端 bundle 不包含本
+ * 模块（`src/index.ts` 与任何 `'use client'` 组件都不 import 它）。
+ *
+ * ⚠️ **这两条路径能拿到的事实不一样**，ZLQ-237 之前本文件把它们当成一样的：
+ *
+ * - 构建期（`○` 静态页预渲染）跑在**构建机**上，整棵仓库树都在，`git`、`pnpm-workspace.yaml`、
+ *   根 `package.json` 都读得到；
+ * - 请求期（`ƒ` 动态页，如 `/create`）跑在 **Vercel 函数产物**里，只有 node-file-trace 追出来的
+ *   那些文件。仓库根**不在**产物里，`git` 也不在。
+ *
+ * 所以请求期唯一能依赖的两样东西是：**平台注入的环境变量**，与**构建期就被打包器内联成字面量
+ * 的值**。版本号因此改成静态 import 根 manifest（下方 `inlinedRepoVersion`）—— 打包器在构建机
+ * 上把它折成字符串字面量，请求期不再碰文件系统。提交号本来就来自环境变量，不受影响。
+ *
+ * 为什么不能用「`findRepoRoot` 失败时兜个常量」来修：`import.meta.url` 被 Turbopack 编译成
+ * `a.F("apps/web/src/build-info.ts")`，即**相对运行时根**解析，在函数里就是 `/var/task/apps/web/src`。
+ * 那条向上查找在函数产物里**必然**走到文件系统根再抛错；给它加兜底等于把一个请求期的文件系统
+ * 依赖藏进 catch 里，而下面第 3 条的失败关闭正是本文件的设计核心，不能被绕开。
  *
  * 取值顺序（§7：Vercel 用 `VERCEL_GIT_COMMIT_SHA`，本地构建回落到当前 Git HEAD）：
  *
@@ -25,6 +40,13 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// 构建期内联（见文件头）。Turbopack 的 JSON 模块**只暴露 default**（具名 import 会在
+// `next build` 时报 `The export version was not found … Did you mean to import default?`），
+// 所以这里取默认导出再挑出 `version` 一个键。
+import rootManifest from '../../../package.json' with { type: 'json' };
+
+const inlinedRepoVersion = rootManifest.version;
 
 export const DEFAULT_SOURCE_URL = 'https://github.com/kunlun322/littleq';
 
@@ -112,6 +134,14 @@ export function resolveSourceUrl(env: NodeJS.ProcessEnv = process.env): string {
   return url.toString().replace(/\/+$/, '');
 }
 
+/**
+ * 从磁盘读根 manifest 的 `version`。
+ *
+ * ZLQ-237 之后**运行时不再走这条**（`resolveBuildInfo` 用构建期内联的那个值）：它只在
+ * 构建机与测试里成立，而函数产物里没有仓库根。保留它是为了当**对账用的独立事实来源** ——
+ * `apps/web/test/index.test.ts` 拿它和 `resolveBuildInfo()` 的输出逐字比，内联值与磁盘上的
+ * 真值一旦漂移（比如改了 import 路径、指到别的 manifest）测试就红。
+ */
 export function readRepoVersion(repoRoot: string): string {
   const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as {
     version?: unknown;
@@ -122,12 +152,12 @@ export function readRepoVersion(repoRoot: string): string {
 export function resolveBuildInfo(env: NodeJS.ProcessEnv = process.env): BuildInfo {
   const commitSha = resolveCommitSha(env);
   const sourceUrl = resolveSourceUrl(env);
-  const repoRoot = findRepoRoot(dirname(fileURLToPath(import.meta.url)));
   const shortCommitSha = commitSha.slice(0, 7);
   return {
     commitSha,
     shortCommitSha,
-    version: `${readRepoVersion(repoRoot)}+${shortCommitSha}`,
+    // 版本号来自构建期内联的字面量，不是请求期的文件系统查找（见文件头与 readRepoVersion）。
+    version: `${inlinedRepoVersion}+${shortCommitSha}`,
     sourceUrl,
     commitUrl: `${sourceUrl}/commit/${commitSha}`,
     commitTreeUrl: `${sourceUrl}/tree/${commitSha}`,
