@@ -22,7 +22,8 @@ import './globals.css';
 export const metadata: Metadata = {
   title: `${SITE_NAME} — 面向 K12 学生的 AI 编程与创作平台`,
   description:
-    'LittleQ 首个可部署切片：品牌、分龄体验方向与开源信息。创作、账号和 AI 功能尚未开放。',
+    'LittleQ：学生登录后用一句话创作可交互的小网页，作品持久保存并在隔离预览区查看。' +
+    '游戏 / 动画 / 绘本专属创作、公开分享与教师 / 家长管理端尚未开放。',
 };
 
 export default function RootLayout({ children }: { readonly children: ReactNode }) {

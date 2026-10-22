@@ -472,3 +472,116 @@ body {
   font-size: var(--lq-font-size-xs);
   color: var(--lq-color-ink);
 }
+
+/* ── 四步闭环（ZLQ-232 §3.3）────────────────────────────────────────────
+ * 令牌里没有「危险色 / 成功色」，所以 `.lq-error` 靠 `role="alert"` 承载语义、
+ * 靠边框与加粗承载视觉，而不是自己发明一个红色 —— 发明色值就是 §5.2 禁的那件事。
+ * 焦点环也不用在这里写：`tokens.css` 已经给 `.lq-tokens-root :focus-visible` 定了。
+ * ─────────────────────────────────────────────────────────────────────── */
+
+.lq-narrow {
+  max-inline-size: var(--lq-density-l2-measure);
+}
+
+.lq-stack {
+  display: grid;
+  gap: var(--lq-space-4);
+}
+
+.lq-panel {
+  padding: var(--lq-space-5);
+  border: 1px solid var(--lq-color-border);
+  border-radius: var(--lq-radius-md);
+  background-color: var(--lq-color-surface);
+}
+
+.lq-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lq-space-4);
+  margin-block-start: var(--lq-space-4);
+}
+
+.lq-form {
+  display: grid;
+  gap: var(--lq-space-4);
+}
+
+.lq-field {
+  display: grid;
+  gap: var(--lq-space-2);
+}
+
+.lq-field-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--lq-space-2);
+}
+
+.lq-label {
+  font-size: var(--lq-font-size-sm);
+  font-weight: var(--lq-font-weight-medium);
+  color: var(--lq-color-ink);
+}
+
+.lq-input {
+  padding-inline: var(--lq-space-3);
+  padding-block: var(--lq-space-2);
+  border: 1px solid var(--lq-color-border);
+  border-radius: var(--lq-radius-sm);
+  background-color: var(--lq-color-surface-raised);
+  color: var(--lq-color-ink);
+  font-family: inherit;
+  font-size: var(--lq-font-size-base);
+  line-height: var(--lq-line-height-base);
+}
+
+.lq-input-multiline {
+  resize: vertical;
+}
+
+.lq-button {
+  justify-self: start;
+  padding-inline: var(--lq-space-5);
+  padding-block: var(--lq-space-3);
+  border: 1px solid var(--lq-color-accent);
+  border-radius: var(--lq-radius-pill);
+  background-color: var(--lq-color-accent);
+  color: var(--lq-color-on-brand);
+  font-family: inherit;
+  font-size: var(--lq-font-size-base);
+  font-weight: var(--lq-font-weight-medium);
+  cursor: pointer;
+  transition: background-color var(--lq-motion-duration) var(--lq-motion-easing);
+}
+
+.lq-button:hover:not(:disabled) {
+  background-color: var(--lq-color-brand-deep);
+  border-color: var(--lq-color-brand-deep);
+}
+
+.lq-button:disabled {
+  border-color: var(--lq-color-border);
+  background-color: var(--lq-color-surface-raised);
+  color: var(--lq-color-ink-soft);
+  cursor: not-allowed;
+}
+
+.lq-hint {
+  margin: 0;
+  font-size: var(--lq-font-size-sm);
+  color: var(--lq-color-ink-soft);
+}
+
+.lq-error {
+  margin: 0;
+  padding: var(--lq-space-3);
+  border: 1px solid var(--lq-color-ink);
+  border-radius: var(--lq-radius-sm);
+  background-color: var(--lq-color-surface-raised);
+  color: var(--lq-color-ink);
+  font-size: var(--lq-font-size-sm);
+  font-weight: var(--lq-font-weight-medium);
+  overflow-wrap: anywhere;
+}

@@ -8,14 +8,16 @@
  * 两条不能妥协的地方：
  *
  * - **不是空壳占位页**（设计 D3 的硬要求）。所以这里没有任何「即将上线」的
- *   模糊话术，状态条写死了「创作、账号和 AI 功能尚未开放」，交付范围块把
+ *   模糊话术，状态条写死了本次真实开放的能力与真实未开放的项，交付范围块把
  *   已交付与未开放逐项列清。
  * - **不是用完即弃**（D3 的另一半）。M1 及以后是在这同一个产物上继续长，
  *   所以文案全部来自 `src/site-content.ts` 常量、卡片内容来自 `@littleq/design-system`，
  *   页面本身只负责结构。
  *
- * 唯一的 `h1` 是英雄区标题（§5.3）。全站只有一个主行动，就是那句「查看源码与许可证」；
- * 「开始创作 / 登录 / 立即体验」这类假入口一个都不出现，因为它们背后的功能还不存在。
+ * 唯一的 `h1` 是英雄区标题（§5.3）。全站只有一个主行动：`PRIMARY_ACTION_LABEL`
+ * 指向 `CREATE_PATH`。ZLQ-190 禁的是**假入口**（点了没反应的按钮），
+ * 不是「登录 / 开始创作」这些词本身 —— 所以这里的判据是**动作真实性**：
+ * 每一个可点的东西背后都有一个真的会响应的端点或真的存在的页面。
  */
 import { UNIT_ID } from '@littleq/design-system';
 
@@ -24,6 +26,8 @@ import { Duckling } from './_components/duckling';
 import {
   AGE_BANDS_HEADING,
   AGE_BANDS_LEAD,
+  CREATE_PATH,
+  FOOTER_SOURCE_LABEL,
   HERO_LEAD,
   HERO_TITLE,
   PRIMARY_ACTION_LABEL,
@@ -83,7 +87,7 @@ export default function HomePage() {
       <section className="lq-section" aria-labelledby="scope-title">
         <div className="lq-container">
           <h2 id="scope-title" className="lq-section-title">
-            本次切片交付了什么
+            本次开放了什么
           </h2>
           <div className="lq-scope">
             <div className="lq-scope-block">
@@ -106,19 +110,23 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 第 5 块：全站唯一的主行动。 */}
+      {/* 第 5 块：全站唯一的主行动。它是真入口 —— 点进去就是能建项目、能发指令的工作台。 */}
       <section className="lq-section" aria-labelledby="cta-title">
         <div className="lq-container">
           <h2 id="cta-title" className="lq-section-title">
-            现在能做的唯一一件事
+            现在就能做的一件事
           </h2>
           <p className="lq-section-lead">
-            本切片没有任何产品功能可用，因此不提供「开始创作 / 登录 / 立即体验」这类入口。
-            真实可去的目的地只有一个：查看源码与许可证。
+            登录学生账号，建一个项目，用一句话描述你想要的网页，然后看 AI 真正生成的结果并打开预览。
           </p>
-          <a className="lq-cta" href={SOURCE_AND_LICENSE_PATH}>
-            {PRIMARY_ACTION_LABEL}
-          </a>
+          <div className="lq-actions">
+            <a className="lq-cta" href={CREATE_PATH}>
+              {PRIMARY_ACTION_LABEL}
+            </a>
+            <a className="lq-link" href={SOURCE_AND_LICENSE_PATH}>
+              {FOOTER_SOURCE_LABEL}
+            </a>
+          </div>
         </div>
       </section>
     </>

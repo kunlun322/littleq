@@ -4,12 +4,13 @@
 //   1. 单元自述：skeletonOnly 已翻成 false（PM 裁定 1）；
 //   2. 首页文案：诚实状态条、交付范围、唯一主行动、法务链接，逐字取自 site-content.ts；
 //   3. 构建期身份：提交号解析顺序、失败关闭、源码 URL 的协议校验；
-//   4. §8 / §9 的安全与范围约束：零凭证、零 Cookie、零 API 路由、不得占用冻结的会话名。
+//   4. §8 / §9 的安全与范围约束：零凭证、零 Cookie、唯一的同源代理路由、不得占用冻结的会话名。
 //
 // 为什么在 node 环境里测而不是渲染 DOM：文案与约束都是**字符串与文件事实**，
-// 渲染断言交给 e2e/smoke.spec.ts（它加载的是真实的 apps/web/out 产物）。
+// 渲染断言交给 e2e/smoke.spec.ts（它加载的是 `next start` 起来的真实服务产物，
+// ZLQ-232 起 apps/web 不再是静态导出，`apps/web/out` 已经不存在了）。
 // 两侧引用同一份 site-content.ts，不可能各说各话。
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -27,10 +28,12 @@ import {
 import { UNIT_ID, isContractLoadable, unitManifest } from '../src/index.js';
 import {
   AGE_BANDS_HEADING,
+  CREATE_PATH,
   FOOTER_SOURCE_LABEL,
   HERO_TITLE,
   LEGAL_FILES,
   LICENSE_ID,
+  LOGIN_PATH,
   MASCOT_ALT,
   PRIMARY_ACTION_LABEL,
   SCOPE_DELIVERED_HEADING,
@@ -132,12 +135,18 @@ describe('@littleq/web 单元自述', () => {
 
 describe('首页文案（§5.1 的六个区块）', () => {
   it('诚实状态条逐字固定，没有被弱化成「即将上线」', () => {
-    expect(STATUS_HEADING).toBe('M0 质量基线已交付，产品功能开发中');
+    expect(STATUS_HEADING).toBe('小网页 AI 创作已开放');
     expect(STATUS_BODY).toBe(
-      '当前可查看品牌、分龄体验方向与开源信息；创作、账号和 AI 功能尚未开放。',
+      '本次支持学生登录、AI 小网页创作、作品保存与隔离预览。成人首次登录需配置自己的 AI 凭据；' +
+        '百炼功能、公开分享和教师 / 家长管理端尚未开放。' +
+        '关闭页面后，任务将在重新打开工作台时恢复查看和推进。',
     );
     // 反空断言：措辞里必须真的点到「尚未开放」，否则换个说法就能悄悄绕开诚实要求。
     expect(STATUS_BODY).toContain('尚未开放');
+    // 反向钉子：不许退回上一版那句「创作、账号和 AI 功能尚未开放」。四步闭环上线后它是
+    // 假话 —— 而假话同样能通过上面那条正向断言（那句里也含「尚未开放」四个字），
+    // 所以只钉正向是不够的：标题说「已开放」而正文说「尚未开放」，页面就自相矛盾了。
+    expect(STATUS_BODY).not.toContain('创作、账号和 AI 功能尚未开放');
   });
 
   it('品牌与英雄区标题按设计文档给出', () => {
@@ -149,25 +158,43 @@ describe('首页文案（§5.1 的六个区块）', () => {
   it('交付范围如实分成「已交付」与「尚未开放」两组，且没有互相污染', () => {
     expect(SCOPE_DELIVERED_HEADING).toBe('本次已交付');
     expect(SCOPE_UNAVAILABLE_HEADING).toBe('尚未开放');
-    expect([...SCOPE_DELIVERED_ITEMS]).toEqual(['可部署页面', '分龄视觉基线', '开源信息入口']);
+    expect([...SCOPE_DELIVERED_ITEMS]).toEqual([
+      '学生登录',
+      'AI 小网页创作',
+      '作品持久保存',
+      '继续创作',
+      '隔离预览',
+      '成人 AI 凭据录入',
+      '分龄视觉基线',
+      '开源信息入口',
+    ]);
     expect([...SCOPE_UNAVAILABLE_ITEMS]).toEqual([
-      'Vibe Coding',
-      '作品发布',
-      '账号',
-      '教师 / 家长',
-      'AI 集成',
+      '游戏 / 动画 / 绘本专属创作',
+      '作品公开发布与分享',
+      '教师 / 家长管理端',
+      '百炼生图 / 视频 / TTS / STT',
+      '代码编辑器',
     ]);
     // 已交付项不得出现在未开放清单里（反之亦然）：否则页面会自相矛盾。
     const delivered = new Set<string>(SCOPE_DELIVERED_ITEMS);
     expect(SCOPE_UNAVAILABLE_ITEMS.filter((item) => delivered.has(item))).toEqual([]);
   });
 
-  it('全站唯一的主行动指向源码与许可证，没有假入口', () => {
-    expect(PRIMARY_ACTION_LABEL).toBe('查看源码与许可证');
+  it('全站唯一的主行动指向创作工作台，站内入口都是真能去的目的地', () => {
+    expect(PRIMARY_ACTION_LABEL).toBe('开始创作');
+    expect(CREATE_PATH).toBe('/create/');
+    expect(LOGIN_PATH).toBe('/login/');
     expect(SOURCE_AND_LICENSE_PATH).toBe('/source-and-license/');
-    // §5.1 第 5 块：不得出现「开始创作 / 登录 / 立即体验」这类没有对应功能的入口。
-    for (const forbidden of ['开始创作', '登录', '立即体验', '注册', '免费试用']) {
-      expect(PRIMARY_ACTION_LABEL).not.toContain(forbidden);
+    // §5.1 第 5 块禁的是**假入口**（点了没反应的按钮），不是「开始创作」「登录」这两个词。
+    // 旧版这条断言是一份词黑名单：四步闭环上线之后，它会把真实存在的入口判成违规 ——
+    // 而「把真入口从黑名单里删掉」这种改法，恰恰能让一个假入口混过去。
+    // 所以判据换成**可执行的事实**：每个站内路径都必须在 app/ 下有对应的 page.tsx。
+    // 它不随文案漂移，缺一个页面就红，多一个没人去的页面也不会因此变绿。
+    for (const path of [CREATE_PATH, LOGIN_PATH, SOURCE_AND_LICENSE_PATH]) {
+      // `trailingSlash: true` 之下站内路径必须带尾斜杠，否则每次点击都多一跳 308。
+      expect(path.endsWith('/'), `${path} 缺尾斜杠`).toBe(true);
+      const page = `app/${path.slice(1, -1)}/page.tsx`;
+      expect(existsSync(join(PACKAGE_ROOT, page)), `${path} 没有对应的 ${page}`).toBe(true);
     }
   });
 
@@ -362,9 +389,24 @@ describe('安全与范围约束（§8 D6 / §9 D7）', () => {
     expect(hits).toEqual([]);
   });
 
-  it('零 API 路由、零 rewrite / redirect：静态路由只有设计文档列出的那几个', () => {
-    // §9：apps/web 不得有 /api/*、catch-all 代理、队列或定时任务。
-    expect(readdirSync(join(PACKAGE_ROOT, 'app')).includes('api')).toBe(false);
+  it('app/ 下只有一条 API 路由，且它是服务端专属的同源代理适配器', () => {
+    // §9 原本要求「零 API 路由、不得有 catch-all 代理」。ZLQ-232 §3.3 改成了**同源** /api/*，
+    // 于是这里确实多出一条路由处理器 —— 但 §9 真正要防的事一件都没放开，所以判据换、强度不换：
+    //   ① 路由文件清单是精确的：多一条必须在这里显式登记，不能悄悄长出来；
+    //   ② 它是服务端专属（`server-only`），浏览器侧一行都拿不到；
+    //   ③ 它不带客户端指令，后端逻辑仍只在 apps/api（依赖面由下面那条全量扫描钉住）。
+    // 「目标地址只来自配置里的单一 origin、不接受用户输入」不在这条里判 —— 那要用真请求
+    // 才算数，由 apps/web/test/api-proxy.test.ts 承担。
+    const routes = sourceFiles().filter((file) => file.endsWith('route.ts'));
+    expect(routes).toEqual(['app/api/[...path]/route.ts']);
+    for (const route of routes) {
+      const source = read(route);
+      expect(source, `${route} 没有声明 server-only`).toContain("import 'server-only'");
+      expect(source, `${route} 带了客户端指令，会在浏览器里执行`).not.toContain("'use client'");
+    }
+  });
+
+  it('零 rewrite / redirect / headers：路由与安全头各由其唯一归属承担', () => {
     const config = read('next.config.ts');
     // 只匹配**配置项**（行首缩进 + 键 + :/(/=），不匹配注释里的散文 ——
     // next.config.ts 的头部注释刻意写明了「不配 rewrites / redirects」，那是说明不是配置。
