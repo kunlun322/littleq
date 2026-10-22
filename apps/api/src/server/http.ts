@@ -763,7 +763,7 @@ function sessionTokenOf(req: IncomingMessage): string | null {
  * 造 `node:http` 的请求处理器。
  *
  * 返回一个纯函数而不是 `http.Server`，是为了让测试可以直接把它挂到任意端口上，也让
- * 「进程怎么起」这件事留在 `main.ts` 里 —— 装配与监听是两件事。
+ * 「进程怎么起」这件事留在启动方 —— 装配与监听是两件事。
  */
 export function createApiHandler(
   services: ApiServices,

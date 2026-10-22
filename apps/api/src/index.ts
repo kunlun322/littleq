@@ -2,7 +2,12 @@
  * `@littleq/api` — 主站 API 组合根。
  *
  * 骨架由 ZLQ-159 落地；HTTP 传输层、鉴权装配、任务编排与驱动装配由 ZLQ-221（F2→B1）
- * 在 `src/server/**` 实现，进程入口在 `src/main.ts`。
+ * 在 `src/server/**` 实现。可启动的组合根是 `@littleq/api/server` 的
+ * `composeApiServices(deps)` + `createApiServer(services)`：调用方建好依赖、负责
+ * `listen` 与 `close`。**本单没有交付读环境变量的进程入口** —— 那要连带部署接线，
+ * 属于 F4（CI/部署）的范围，而且 `bootstrapAccounts` 是 TTY 门禁的、ZLQ-153 §1.3
+ * 的"首个口令"前提至今未满足，一个读 `process.env` 的入口在这一单里既跑不起来也
+ * 测不了，只会变成一段无证据的自述代码。
  *
  * 边界（ZLQ-153 §1.3 / §5.4）：
  *

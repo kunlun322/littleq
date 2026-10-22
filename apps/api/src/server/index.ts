@@ -18,11 +18,18 @@
  * 只作用于 `apps/web/app/api/` 下面那些 `route.ts` 适配器文件，不作用于本包。"根 barrel 不回流
  * 到客户端"这条要求由**结构**满足：`src/index.ts` 不 re-export `server/`。
  *
- * ## 装配是纯函数，读环境变量的只有 `main.ts`
+ * ## 装配是纯函数，读环境变量的是启动方
  *
  * `composeApiServices` 收的是**已经建好的**依赖，不读 `process.env`、不读时钟。于是
- * 验收测试可以把同一份装配接到测试库上，而生产入口 `main.ts` 负责"从环境变量到依赖"
- * 这一步。这条切分与 domain / application 是同一条约束（附录 A §6.3）。
+ * 验收测试可以把同一份装配接到测试库上，而"从环境变量到依赖"这一步留给**启动方**。
+ * 这条切分与 domain / application 是同一条约束（附录 A §6.3）。
+ *
+ * ⚠️ **本包没有交付读环境变量的进程入口。** 可启动的表面就是本文件的
+ * `composeApiServices(deps)` + `createApiServer(services)`，`listen` / `close` 由调用方
+ * 负责（验收测试正是这么起真服务的）。进程入口要连带部署接线，属于 F4 的范围；而
+ * `bootstrapAccounts` 是 TTY 门禁的、ZLQ-153 §1.3 的"首个口令"前提至今未满足，一个读
+ * `process.env` 的入口在这一单里既跑不起来也测不了 —— 与其交一段没有证据的自述代码，
+ * 不如把它留在启动方那一侧。
  */
 import { createServer, type Server } from 'node:http';
 
@@ -130,7 +137,7 @@ export interface ApiDependencies {
  * 六个 Postgres 目录都在这里 new 出来，而不是让调用方传：它们的构造器只收一个
  * `DatabaseAdapter`，没有任何可配置项，把构造暴露给调用方只是多一处能配错的地方。
  * `TaskUnitOfWork` / `TaskPumpStore` 同理（`new PostgresTaskUnitOfWork(db)` /
- * `PostgresTaskPumpStore.of(db)`），但它们是 **F1 的**类，由 `main.ts` 建好后传进来 ——
+ * `PostgresTaskPumpStore.of(db)`），但它们是 **F1 的**类，由**调用方**建好后传进来 ——
  * 组合根不该替 F1 决定用哪个实现，测试也要能换成替身。
  */
 export function composeApiServices(
@@ -177,7 +184,7 @@ export function createApiServer(services: ApiServices): Server {
   return createServer(createApiHandler(services));
 }
 
-/** 供 `main.ts` 与测试共用的路径拼接，避免两处各写一遍前缀。 */
+/** 路径拼接。启动方与测试共用，避免两处各写一遍前缀。 */
 export function apiPath(route: string): string {
   return `${API_PREFIX}${route.startsWith('/') ? route : `/${route}`}`;
 }
