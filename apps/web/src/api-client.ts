@@ -58,7 +58,12 @@ export type ApiOutcome<T> =
   | { ok: false; failure: ApiFailure };
 
 export type ApiCall = {
-  method: 'GET' | 'POST';
+  /**
+   * `PUT` 是这一版加进来的，只为一件事：凭据设置页写 `PUT /settings/secrets/{kind}`。
+   * 同源代理那一侧（`src/api-proxy.ts` 的 `ALLOWED_METHODS`）本来就放行 PUT，所以这里
+   * 放宽**没有**打开任何新的转发面 —— 它只是让本层能表达契约里已存在的那个方法。
+   */
+  method: 'GET' | 'POST' | 'PUT';
   path: string;
   expectedStatus: number;
   /** JSON 请求体；GET 一律不传。 */
@@ -368,6 +373,31 @@ export function asCreatePreviewResponse(
   const versionId = str(value['versionId']);
   if (url === null || expiresAt === null || versionId === null) return null;
   return { url, expiresAt, versionId };
+}
+
+/** UI 会读到的凭据元数据字段。契约的 `SecretMetadata` 就这三个，一个不多。 */
+export type SecretMetadataView = {
+  kind: string;
+  configured: boolean;
+  lastRotatedAt: string | null;
+};
+
+/**
+ * `GET /settings/secrets/{kind}` 的 200 响应（抄自契约的 `secretMetadataSchema`，三个键）。
+ *
+ * ⚠️ **这里刻意只认三个键，且第三个只接受 `string | null`。** 契约的读模型**结构上不含
+ * `value`**（ZLQ-195 §5.5「永不含 value」），所以本层也不给它一个能落地的类型：即使某个
+ * 后端版本真的多回了一个 `value`，`SecretMetadataView` 上也没有那个字段可读，UI 就没有
+ * 任何一条路径能把它渲染出来。这是"凭据不回显"在前端侧的结构性保证，不是一句注释。
+ */
+export function asSecretMetadata(value: unknown): SecretMetadataView | null {
+  if (!isRecord(value)) return null;
+  const kind = str(value['kind']);
+  if (kind === null) return null;
+  if (typeof value['configured'] !== 'boolean') return null;
+  const lastRotatedAt = value['lastRotatedAt'];
+  if (lastRotatedAt !== null && str(lastRotatedAt) === null) return null;
+  return { kind, configured: value['configured'], lastRotatedAt: lastRotatedAt as string | null };
 }
 
 // ---- 展示层：把机器码翻成人话 -------------------------------------------

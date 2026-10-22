@@ -36,10 +36,12 @@ import {
   LOGIN_PATH,
   MASCOT_ALT,
   PRIMARY_ACTION_LABEL,
+  SCOPE_DELIVERED_ENTRIES,
   SCOPE_DELIVERED_HEADING,
   SCOPE_DELIVERED_ITEMS,
   SCOPE_UNAVAILABLE_HEADING,
   SCOPE_UNAVAILABLE_ITEMS,
+  SETTINGS_PATH,
   SITE_NAME,
   SOURCE_AND_LICENSE_PATH,
   STATUS_BODY,
@@ -196,6 +198,50 @@ describe('首页文案（§5.1 的六个区块）', () => {
       const page = `app/${path.slice(1, -1)}/page.tsx`;
       expect(existsSync(join(PACKAGE_ROOT, page)), `${path} 没有对应的 ${page}`).toBe(true);
     }
+  });
+
+  /** 站内路径 → `app/` 下的页面文件。根路径就是 `app/page.tsx`，不能拼成 `app//page.tsx`。 */
+  function pageFileOf(path: string): string {
+    return path === '/' ? 'app/page.tsx' : `app/${path.slice(1, -1)}/page.tsx`;
+  }
+
+  it('「本次已交付」里每一项都有一个真能走进去的页面（ZLQ-236 验收项 A）', () => {
+    // 这一条要挡住的缺陷是**真实发生过的**：首页把「成人 AI 凭据录入」写在「本次已交付」里，
+    // 而路由表里根本没有那个页面 —— 文案在宣称一个不存在的能力，而既有 e2e 抓不住它，
+    // 因为 `expectEveryActionIsReal` 判的是「有没有点了没反应的假入口」，纯文字无从点起。
+    //
+    // 判据是**双向集合相等**，不是「ENTRIES 覆盖了 ITEMS」：
+    //   少一个键 ⇒ 首页那一项渲染时取不到 href（TS 也会红，运行时同样要挡住）；
+    //   多一个键 ⇒ 有人给一个已经不再宣称的能力留了入口，或改文案时忘了同步。
+    // 两种情况都意味着这张表不再是「已交付清单」的镜像。
+    const declared = [...SCOPE_DELIVERED_ITEMS].sort();
+    const mapped = Object.keys(SCOPE_DELIVERED_ENTRIES).sort();
+    expect(mapped, '有文案宣称的能力没有对应入口').toEqual(declared);
+    expect(declared, '有入口的能力不在「本次已交付」文案里').toEqual(mapped);
+
+    // 每条路径都必须在 `app/` 下真有 page.tsx，且带尾斜杠（`trailingSlash: true`）。
+    for (const path of Object.values(SCOPE_DELIVERED_ENTRIES)) {
+      expect(path === '/' || path.endsWith('/'), `${path} 缺尾斜杠`).toBe(true);
+      const page = pageFileOf(path);
+      expect(existsSync(join(PACKAGE_ROOT, page)), `${path} 没有对应的 ${page}`).toBe(true);
+    }
+
+    // 凭据录入那一项必须指向设置页本身，而不是被塞给创作工作台凑数 ——
+    // 凑数能让上面的集合断言全绿，却仍然兑现不了那句宣称。
+    expect(SETTINGS_PATH).toBe('/settings/');
+    expect(SCOPE_DELIVERED_ENTRIES['成人 AI 凭据录入']).toBe(SETTINGS_PATH);
+
+    // 首页必须**真的把这张表渲染成链接**：只声明不渲染，e2e 就实测不到它，
+    // 「宣称的能力可被点击验证」也就落空了。
+    const home = read('app/page.tsx');
+    expect(home).toContain('SCOPE_DELIVERED_ITEMS');
+    expect(home).toContain('SCOPE_DELIVERED_ENTRIES');
+
+    // 反空对照：上面那个 `existsSync` 判据不是恒真。一个不存在的路径必须判负，
+    // 且根路径必须走 `app/page.tsx` 这条特例（否则拼出 `app//page.tsx`，恒假也就恒绿）。
+    expect(existsSync(join(PACKAGE_ROOT, pageFileOf('/no-such-page/')))).toBe(false);
+    expect(pageFileOf('/')).toBe('app/page.tsx');
+    expect(existsSync(join(PACKAGE_ROOT, pageFileOf('/')))).toBe(true);
   });
 
   it('分龄区块的标题存在，且三档元数据全部来自设计系统包而不是本地副本', () => {

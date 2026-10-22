@@ -31,6 +31,7 @@ import {
   HERO_LEAD,
   HERO_TITLE,
   PRIMARY_ACTION_LABEL,
+  SCOPE_DELIVERED_ENTRIES,
   SCOPE_DELIVERED_HEADING,
   SCOPE_DELIVERED_ITEMS,
   SCOPE_UNAVAILABLE_HEADING,
@@ -92,14 +93,29 @@ export default function HomePage() {
           <div className="lq-scope">
             <div className="lq-scope-block">
               <h3 className="lq-scope-title">{SCOPE_DELIVERED_HEADING}</h3>
+              {/*
+                已交付的每一项都是**真链接**，指向真能走进去的那个页面（ZLQ-236 验收项 A）。
+
+                为什么必须可点：这一栏曾经写着「成人 AI 凭据录入」，而路由表里没有那个页面 ——
+                一句纯文字宣称，既有 e2e 抓不住它，因为 `expectEveryActionIsReal` 判的是
+                「有没有点了没反应的假入口」，而纯文字根本没有可点的东西。把它变成链接之后，
+                那条 e2e 就会顺手实测它 200，宣称与能力之间的漂移当场可见。
+                `SCOPE_DELIVERED_ENTRIES` 的键集合与 `SCOPE_DELIVERED_ITEMS` 相等、且每个路径
+                在 `app/` 下真有 `page.tsx`，这两条由 `test/index.test.ts` 两侧断言。
+              */}
               <ul className="lq-scope-list">
                 {SCOPE_DELIVERED_ITEMS.map((item) => (
-                  <li key={item}>{item}</li>
+                  <li key={item}>
+                    <a className="lq-link" href={SCOPE_DELIVERED_ENTRIES[item]}>
+                      {item}
+                    </a>
+                  </li>
                 ))}
               </ul>
             </div>
             <div className="lq-scope-block">
               <h3 className="lq-scope-title">{SCOPE_UNAVAILABLE_HEADING}</h3>
+              {/* 未开放项**刻意不是链接**：没有页面可去，做成链接就是假入口。 */}
               <ul className="lq-scope-list">
                 {SCOPE_UNAVAILABLE_ITEMS.map((item) => (
                   <li key={item}>{item}</li>

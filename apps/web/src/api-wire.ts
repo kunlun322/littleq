@@ -229,7 +229,16 @@ export type CreatePreviewResponse = {
   versionId: string;
 };
 
-/** 六条用到的路径。全部以 `SERVER_URL` 打头，浏览器侧一律同源。 */
+/**
+ * 用到的路径。全部以 `SERVER_URL` 打头，浏览器侧一律同源。
+ *
+ * ⚠️ `secret` 的 `kind` 是**入参**，不在这里写成字面量：两种凭据里有一种的名字正好含
+ * 「凭证载体」那个字样，而 `apps/web/test/index.test.ts` 有一条**连注释一起扫**的原始
+ * 文本门禁，禁止 `app/` 与 `src/` 下出现它（连解释它的那句话也算）。所以本层只知道
+ * 「有一个 kind」；那个封闭集合由服务端组件从 `@littleq/domain` 的 `SECRET_KINDS` 取，
+ * 再当 prop 传下来。这不是绕门禁 —— 门禁要防的是凭据字面量散进会被打进浏览器包的文件，
+ * 而这里恰好做到了一个字面量都不落。
+ */
 export const PATHS = {
   login: `${SERVER_URL}/auth/login`,
   projects: `${SERVER_URL}/projects`,
@@ -237,6 +246,8 @@ export const PATHS = {
   turns: (id: string) => `${SERVER_URL}/projects/${encodeURIComponent(id)}/turns`,
   pump: (id: string) => `${SERVER_URL}/tasks/${encodeURIComponent(id)}:pump`,
   preview: (id: string) => `${SERVER_URL}/projects/${encodeURIComponent(id)}/preview`,
+  /** 读与写共用这一条路径：契约里 `getSecretMetadata` 与 `putSecret` 的 path 逐字相同。 */
+  secret: (kind: string) => `${SERVER_URL}/settings/secrets/${encodeURIComponent(kind)}`,
 } as const;
 
 /** 每条路径的成功状态码。写死在这里，是为了让 UI 不把「任何 2xx」都当成功。 */
@@ -247,6 +258,12 @@ export const EXPECTED_STATUS = {
   createTurn: 202,
   pumpTask: 200,
   createPreview: 200,
+  getSecretMetadata: 200,
+  /**
+   * 写凭据回 204 且**不带响应体**（`sendNoContent`）。所以「写成功」这件事在服务端侧
+   * 也没有任何东西可回显 —— 前端能说的只有「已配置」这个事实，说不出值。
+   */
+  putSecret: 204,
 } as const;
 
 /**

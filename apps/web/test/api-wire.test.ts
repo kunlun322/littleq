@@ -67,6 +67,7 @@ const CONTRACT_COMMON = 'packages/api-contract/src/schemas/common.ts';
 const CONTRACT_OPENAPI = 'packages/api-contract/src/openapi.ts';
 const DOMAIN_ACCOUNT = 'packages/domain/src/value-objects/account.ts';
 const DOMAIN_PROJECT = 'packages/domain/src/value-objects/project.ts';
+const DOMAIN_REFS = 'packages/domain/src/value-objects/refs.ts';
 const DOMAIN_TASK = 'packages/domain/src/value-objects/task.ts';
 const OPENAPI_SNAPSHOT = 'contracts/openapi/v1/openapi.json';
 
@@ -74,6 +75,7 @@ const common = read(CONTRACT_COMMON);
 const openapiSource = read(CONTRACT_OPENAPI);
 const domainAccount = read(DOMAIN_ACCOUNT);
 const domainProject = read(DOMAIN_PROJECT);
+const domainRefs = read(DOMAIN_REFS);
 const domainTask = read(DOMAIN_TASK);
 
 /**
@@ -166,17 +168,43 @@ function findOperation(operationId: string): { method: string; path: string; sta
 /** 合法的小写 UUID v7：`encodeURIComponent` 不会改动它，所以能当路径参数探针。 */
 const PROBE_ID = '01890b1a-2f01-7abc-8def-0123456789ab';
 
+/**
+ * 凭据种类的封闭集合 —— **从 domain 源码里抽**，不在本文件写字面量。
+ *
+ * 为什么这里能抽而 `src/` 下不能写：`apps/web/test/index.test.ts` 有一条连注释一起扫的
+ * 原始文本门禁，禁止 `app/` 与 `src/` 下出现凭证载体字样（其中一种凭据的名字就含那个
+ * 字样）。测试目录不在它的扫描面里，而本文件的既有纪律恰好也是「读契约源码文本、
+ * 不新增第三份重述」，两边于是指向同一个做法。
+ */
+const SECRET_KINDS_FROM_DOMAIN = enumMembers(domainRefs, 'SECRET_KINDS');
+
+/**
+ * 凭据种类探针：取集合里最后一个（名字最长、带下划线的那个），因为它最能暴露
+ * 「整段编码把路径参数也编掉」这类问题。抽不到就抛，绝不静默用空串当探针。
+ */
+const PROBE_KIND: string = (() => {
+  const kind = SECRET_KINDS_FROM_DOMAIN.at(-1);
+  if (kind === undefined) throw new Error('domain 源码里没有 `export const SECRET_KINDS`');
+  return kind;
+})();
+
 /** 把浏览器实际会请求的 URL 还原成快照里的路径模板。 */
 function templateOf(url: string): string {
-  return url.slice(SERVER_URL.length).replaceAll(encodeURIComponent(PROBE_ID), '{id}');
+  return url
+    .slice(SERVER_URL.length)
+    .replaceAll(encodeURIComponent(PROBE_ID), '{id}')
+    .replaceAll(encodeURIComponent(PROBE_KIND), '{kind}');
 }
 
 /**
- * 本切片用到的六条操作。
+ * 本切片用到的八条操作。
  *
  * 这里刻意写成「一条操作一行、把 `PATHS` 的产物直接摆出来」：比对的**一侧**是运行时真的
  * 会被 `fetch` 的那个字符串，另一侧是快照。若改成在测试里重拼一遍路径，比的就只是两份
  * 测试自己的想象。
+ *
+ * ⚠️ 多一条必须在这里显式登记（下面还有两条键集合断言会红）—— 那是设计好的摩擦，
+ * 不是可以顺手删掉的样板。
  */
 const CALLS = [
   { operation: 'login', status: 'login', method: 'POST', url: PATHS.login },
@@ -189,6 +217,18 @@ const CALLS = [
     status: 'createPreview',
     method: 'POST',
     url: PATHS.preview(PROBE_ID),
+  },
+  {
+    operation: 'getSecretMetadata',
+    status: 'getSecretMetadata',
+    method: 'GET',
+    url: PATHS.secret(PROBE_KIND),
+  },
+  {
+    operation: 'putSecret',
+    status: 'putSecret',
+    method: 'PUT',
+    url: PATHS.secret(PROBE_KIND),
   },
 ] as const;
 
@@ -219,6 +259,17 @@ describe('阳性对照：文本抽取器真的读到了东西', () => {
     expect(encodeURIComponent(PROBE_ID)).toBe(PROBE_ID);
     expect(templateOf(PATHS.pump(PROBE_ID))).toBe('/tasks/{id}:pump');
   });
+
+  it('凭据种类探针取自 domain，且两个种类都是路径安全的（编码后逐字不变）', () => {
+    // 阳性对照：这条断言真的读到了东西 —— domain 那个常量至少有两个成员，
+    // 而且抽出来的确实是那两种凭据的名字形态（大写字母、数字、下划线）。
+    expect(SECRET_KINDS_FROM_DOMAIN.length).toBeGreaterThanOrEqual(2);
+    for (const kind of SECRET_KINDS_FROM_DOMAIN) {
+      expect(kind, `${kind} 不是大写下划线形态`).toMatch(/^[A-Z][A-Z0-9_]*$/);
+      expect(encodeURIComponent(kind), `${kind} 会被路径编码改动`).toBe(kind);
+    }
+    expect(templateOf(PATHS.secret(PROBE_KIND))).toBe('/settings/secrets/{kind}');
+  });
 });
 
 describe('同源前缀与单一目标', () => {
@@ -236,7 +287,7 @@ describe('同源前缀与单一目标', () => {
     expect(() => new URL(SERVER_URL)).toThrow();
   });
 
-  it('六条路径全部以 SERVER_URL 打头，没有一条是绝对地址', () => {
+  it('每条路径都以 SERVER_URL 打头，没有一条是绝对地址', () => {
     const urls = [
       PATHS.login,
       PATHS.projects,
@@ -244,6 +295,7 @@ describe('同源前缀与单一目标', () => {
       PATHS.turns(PROBE_ID),
       PATHS.pump(PROBE_ID),
       PATHS.preview(PROBE_ID),
+      PATHS.secret(PROBE_KIND),
     ];
     for (const url of urls) {
       expect(url.startsWith(SERVER_URL), `${url} 不以 ${SERVER_URL} 打头`).toBe(true);
@@ -251,14 +303,14 @@ describe('同源前缀与单一目标', () => {
     }
   });
 
-  it('PATHS 的键就是那六条，一条都没多抄（多抄 ⇒ 漂移面变大）', () => {
+  it('PATHS 的键就是那七条，一条都没多抄（多抄 ⇒ 漂移面变大）', () => {
     expect(Object.keys(PATHS).sort()).toEqual(
-      ['login', 'preview', 'project', 'projects', 'pump', 'turns'].sort(),
+      ['login', 'preview', 'project', 'projects', 'pump', 'secret', 'turns'].sort(),
     );
   });
 });
 
-describe('六条操作：路径、方法与成功状态码都对得上快照', () => {
+describe('八条操作：路径、方法与成功状态码都对得上快照', () => {
   for (const call of CALLS) {
     it(`${call.operation}：${call.method} ${templateOf(call.url)} ⇒ ${EXPECTED_STATUS[call.status]}`, () => {
       const found = findOperation(call.operation);
@@ -282,6 +334,41 @@ describe('六条操作：路径、方法与成功状态码都对得上快照', (
     expect(PATHS.pump(PROBE_ID)).toBe(`${SERVER_URL}/tasks/${PROBE_ID}:pump`);
     expect(PATHS.pump(PROBE_ID)).not.toContain('%3A');
     expect(findOperation('pumpTask').path).toBe('/tasks/{id}:pump');
+  });
+
+  it('凭据路径只带种类、不带值；写的成功码是 204，快照里那个 204 没有响应体', () => {
+    expect(PATHS.secret(PROBE_KIND)).toBe(`${SERVER_URL}/settings/secrets/${PROBE_KIND}`);
+    expect(findOperation('getSecretMetadata').method).toBe('GET');
+    expect(findOperation('putSecret').method).toBe('PUT');
+    expect(EXPECTED_STATUS.putSecret).toBe(204);
+    // 服务端那半边的「不回显」也是可查的事实，不只是前端自觉：快照里 `putSecret` 的 204
+    // 没有 `content`，所以前端拿不到任何东西可以显示成「你刚存的值」。
+    const putResponses = snapshot.paths[findOperation('putSecret').path]?.['put']?.responses;
+    const noContent = putResponses?.['204'] as { content?: unknown } | undefined;
+    expect(noContent, '快照里 `putSecret` 的 204 不见了').toBeDefined();
+    expect(noContent?.content).toBeUndefined();
+  });
+
+  it('前端没有 rotate / revoke 的路径：那两条没接线，造按钮就是假入口', () => {
+    const urls = [
+      PATHS.login,
+      PATHS.projects,
+      PATHS.project(PROBE_ID),
+      PATHS.turns(PROBE_ID),
+      PATHS.pump(PROBE_ID),
+      PATHS.preview(PROBE_ID),
+      PATHS.secret(PROBE_KIND),
+    ];
+    for (const url of urls) {
+      expect(url).not.toContain(':rotate');
+      expect(url).not.toContain(':revoke');
+    }
+    // 两条阳性对照，否则上面那一批「零命中」是空的：
+    // ① 快照里这两条操作**确实存在**（不是因为我找错了名字才没命中）；
+    // ② 同一种抽取方式在 pump 上抓得住自定义动词。
+    expect(findOperation('rotateSecret').path).toBe('/settings/secrets/{kind}:rotate');
+    expect(findOperation('revokeSecret').path).toBe('/settings/secrets/{kind}:revoke');
+    expect(PATHS.pump(PROBE_ID)).toContain(':pump');
   });
 });
 
