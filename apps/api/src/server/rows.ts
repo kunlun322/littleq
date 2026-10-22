@@ -18,7 +18,13 @@
  * 2. 写 `bytea` 必须传 `Buffer`；裸 `Uint8Array` 会被序列化成 `{"0":12,…}`。
  * 3. `timestamptz` 存微秒、JS `Date` 只有毫秒 ⇒ 写入前归一到恰好 3 位小数，保证 round-trip 恒等。
  */
-import { DomainError, parseRevision, parseTimestamp, type Revision, type Timestamp } from '@littleq/domain';
+import {
+  DomainError,
+  parseRevision,
+  parseTimestamp,
+  type Revision,
+  type Timestamp,
+} from '@littleq/domain';
 import { infraError } from '@littleq/infra';
 
 /** 写 `timestamptz` 前把小数位归一到恰好 3 位（`toISOString()` 恒为 3 位）。 */

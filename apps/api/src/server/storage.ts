@@ -554,9 +554,7 @@ export class PostgresProjectDirectory implements ProjectDirectory {
     return {
       items,
       nextCursor:
-        hasMore && last !== undefined
-          ? encodeCursor(`${last.updatedAt}|${last.id}`)
-          : null,
+        hasMore && last !== undefined ? encodeCursor(`${last.updatedAt}|${last.id}`) : null,
     };
   }
 

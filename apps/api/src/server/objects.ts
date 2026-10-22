@@ -80,11 +80,11 @@ export class InProcessObjectStore {
    * ⚠️ 因此 `objectRef` **不是** infra `ObjectRef` 那个 branded 类型：那个类型的文法
    * 不含 `:`，也不承诺可反解。这里刻意不做品牌提升，避免让人以为它俩是同一个东西。
    */
-  put(input: {
-    readonly key: string;
-    readonly body: Uint8Array;
-    readonly contentType: string;
-  }): { readonly objectRef: ObjectRefText; readonly sha256: string; readonly byteLength: number } {
+  put(input: { readonly key: string; readonly body: Uint8Array; readonly contentType: string }): {
+    readonly objectRef: ObjectRefText;
+    readonly sha256: string;
+    readonly byteLength: number;
+  } {
     if (input.key === '') throw DomainError.invalid('ObjectKey');
     if (this.#objects.has(input.key)) {
       // 不可覆盖：第二次写是重放信号，不是"再存一遍"。
@@ -119,7 +119,9 @@ export class InProcessObjectStore {
     for (const stored of this.#objects.values()) {
       if (stored.key.startsWith(prefix)) matched.push(stored);
     }
-    return matched.sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0));
+    return matched.sort((left, right) =>
+      left.key < right.key ? -1 : left.key > right.key ? 1 : 0,
+    );
   }
 }
 
