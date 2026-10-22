@@ -97,6 +97,7 @@ function hex(bytes: Uint8Array): string {
 const ownerPassword = hex(random.bytes(16));
 const studentPassword = hex(random.bytes(16));
 const qcaPatPlaintext = `lq-test-pat-${hex(random.bytes(12))}`;
+const bailianKeyPlaintext = `lq-test-key-${hex(random.bytes(12))}`;
 
 /**
  * 32 byte 的真随机根密钥，每次运行重新生成。刻意不用一个写死在源码里的常量：写死的测试
@@ -659,6 +660,136 @@ describe('apps/api 的黑盒验收能力 ' + CAPABILITY, () => {
     expect(rows[0]?.nonce).not.toBeNull();
     expect(rows[0]?.tag).not.toBeNull();
     expect(rows[0]?.key_version).toBe(1);
+  });
+
+  it('OWNER 配好第二种凭据：同一套「204 不回显 + 元数据只有三个键」在另一个 kind 上同样成立', async () => {
+    // 为什么要单独一条：上一条只跑了 QCA_PAT。两种凭据走的是**同一个** handler 与同一张表，
+    // 但 kind 是**路径参数** —— 编码、大小写、以及 `owner_secrets` 的 (owner_id, kind) 主键
+    // 这三件事，都只有在第二个 kind 上才会真的被压到。只验一个 kind 的话，"把 kind 写死成
+    // QCA_PAT" 这种退化能让全套断言保持绿。
+    const jar = emptyJar();
+    const login = await call(baseUrl, jar, {
+      method: 'POST',
+      route: '/auth/login',
+      body: { loginName: ownerLoginName, password: ownerPassword },
+    });
+    expect(login.response.status).toBe(204);
+
+    const put = await call(baseUrl, jar, {
+      method: 'PUT',
+      route: '/settings/secrets/BAILIAN_API_KEY',
+      csrf: true,
+      body: { value: bailianKeyPlaintext },
+    });
+    expect(put.response.status).toBe(204);
+    expect(put.text).toBe('');
+
+    const get = await call(baseUrl, jar, {
+      method: 'GET',
+      route: '/settings/secrets/BAILIAN_API_KEY',
+    });
+    expect(get.response.status).toBe(200);
+    const metadata = JSON.parse(get.text) as Record<string, unknown>;
+    expect(Object.keys(metadata).sort()).toEqual(['configured', 'kind', 'lastRotatedAt']);
+    expect(metadata.configured).toBe(true);
+    expect(metadata.kind).toBe('BAILIAN_API_KEY');
+    expect(get.text).not.toContain(bailianKeyPlaintext);
+
+    // 此刻两种凭据**并存**（上一条用例配的 QCA_PAT 没有清）。所以这里按 kind 列出全部行，
+    // 并且反过来断言"恰好两种各一行"：少一种说明第二个 kind 其实覆盖进了第一行（主键没吃
+    // kind），多一种说明有别的用例在同一个 owner 上留了没清的行 —— 两种都意味着这条断言
+    // 正在量的东西和我以为的不是一回事。
+    const rows = await queryHarness<{
+      readonly kind: string;
+      readonly current_ref: string | null;
+      readonly ciphertext: Buffer | null;
+    }>(
+      harness,
+      'SELECT kind, current_ref, ciphertext FROM owner_secrets WHERE owner_id = $1 ORDER BY kind',
+      [ownerId],
+    );
+    expect(rows.map((row) => row.kind)).toEqual(['BAILIAN_API_KEY', 'QCA_PAT']);
+    for (const row of rows) {
+      expect(Buffer.from(row.ciphertext ?? Buffer.alloc(0)).toString('utf8')).not.toContain(
+        bailianKeyPlaintext,
+      );
+    }
+
+    // 阳性对照：上面那批 `not.toContain` 不是恒真的 —— 值确实存进去了，只是以密文形式。
+    // 用**对的那把**根密钥能把它原样读回来（purpose 取自 store.ts:251 的映射），而密文里
+    // 找不到它。少了这一条，"密文不含明文"在存了个空值的退化实现上同样会绿。
+    const bailianRow = rows.find((row) => row.kind === 'BAILIAN_API_KEY');
+    expect(bailianRow?.current_ref).not.toBeNull();
+    const recovered = await goodSecrets.read(
+      parseSecretRef(bailianRow?.current_ref ?? ''),
+      'bailian-call',
+    );
+    expect(Buffer.from(recovered).toString('utf8')).toBe(bailianKeyPlaintext);
+  });
+
+  it('配好之后再保存：同值幂等 204，异值 409，且两条响应都不含明文', async () => {
+    // 这一条钉的是设置页那句用户看得见的说明的**事实依据**。页面文案逐字承诺「一种凭据
+    // 配好之后，本次还不能在这一页上更换或撤销」，而更换走的是 `:rotate` —— 它在
+    // `apps/api` 里**没有接线**（`HANDLERS` 没有 `rotateSecret` / `revokeSecret` 两个键）。
+    // 于是"第二次保存会发生什么"完全由 PUT 自己的语义决定，而那份语义此前**没有任何
+    // HTTP 层的测试**：openapi.json 写的是「PUT 是幂等的写入：首次配置与覆盖同一个值
+    // 都走它」，`packages/infra/src/secret-store/store.ts:130-138` 的实现是"同值幂等
+    // 返回、异值抛 `SECRET_ALREADY_CONFIGURED`"，两者一致，但一致这件事没人验过。
+    //
+    // 若不钉住，一个"顺手把异值也覆盖掉"的改动会让页面文案变成假的，而全套测试照旧绿。
+    const jar = emptyJar();
+    await call(baseUrl, jar, {
+      method: 'POST',
+      route: '/auth/login',
+      body: { loginName: ownerLoginName, password: ownerPassword },
+    });
+
+    // 同值重试：幂等成功，204、无 body。这就是"网络抖了一下、用户又点了一次保存"的路径，
+    // 它必须成功 —— 报 409 会让用户以为自己填错了。
+    const same = await call(baseUrl, jar, {
+      method: 'PUT',
+      route: '/settings/secrets/BAILIAN_API_KEY',
+      csrf: true,
+      body: { value: bailianKeyPlaintext },
+    });
+    expect(same.response.status).toBe(204);
+    expect(same.text).toBe('');
+
+    // 异值：409，不静默覆盖。响应体是统一错误 envelope，`code` 是对外的那个码
+    // （infra 的 `SECRET_ALREADY_CONFIGURED` 按 `packages/infra/src/errors.ts:151`
+    // 映射成 `REVISION_CONFLICT`）。
+    const different = `lq-test-key-${hex(random.bytes(12))}`;
+    const conflict = await call(baseUrl, jar, {
+      method: 'PUT',
+      route: '/settings/secrets/BAILIAN_API_KEY',
+      csrf: true,
+      body: { value: different },
+    });
+    expect(conflict.response.status).toBe(409);
+    const envelope = JSON.parse(conflict.text) as Record<string, unknown>;
+    expect(envelope.code).toBe('REVISION_CONFLICT');
+    // 错误响应同样是一条出向路径，所以"不回显"在这里也要成立：新值、旧值都不许出现。
+    expect(conflict.text).not.toContain(different);
+    expect(conflict.text).not.toContain(bailianKeyPlaintext);
+
+    // 409 之后库里仍是**原来那个值**，没有被半写进去。
+    const after = await call(baseUrl, jar, {
+      method: 'GET',
+      route: '/settings/secrets/BAILIAN_API_KEY',
+    });
+    expect(after.response.status).toBe(200);
+    expect((JSON.parse(after.text) as Record<string, unknown>).configured).toBe(true);
+    const rows = await queryHarness<{ readonly current_ref: string | null }>(
+      harness,
+      'SELECT current_ref FROM owner_secrets WHERE owner_id = $1 AND kind = $2',
+      [ownerId, 'BAILIAN_API_KEY'],
+    );
+    expect(rows).toHaveLength(1);
+    const stillOriginal = await goodSecrets.read(
+      parseSecretRef(rows[0]?.current_ref ?? ''),
+      'bailian-call',
+    );
+    expect(Buffer.from(stillOriginal).toString('utf8')).toBe(bailianKeyPlaintext);
   });
 
   it('OWNER 不能冒充学生建项目；CSRF 双提交真的生效', async () => {
