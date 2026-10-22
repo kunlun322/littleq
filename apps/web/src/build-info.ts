@@ -1,9 +1,10 @@
 /**
  * 构建期站点身份（ZLQ-190 §7 D5）。
  *
- * 只在**构建期**的 Server Component 里调用：`output: 'export'` 下页面在 `next build` 时
- * 于 Node 中预渲染，因此这里可以用 `git` 与环境变量，而产物里只剩下已经算好的字符串。
- * 客户端 bundle 不包含本模块（`src/index.ts` 与任何 `'use client'` 组件都不 import 它）。
+ * 只在**服务端**的 Server Component 里调用：ZLQ-232 起 `apps/web` 是服务构建，静态页在
+ * `next build` 时于 Node 中预渲染、动态页在请求时于 Node 中渲染，两种情况这里都能用
+ * `git` 与环境变量。客户端 bundle 不包含本模块（`src/index.ts` 与任何 `'use client'` 组件
+ * 都不 import 它）。
  *
  * 取值顺序（§7：Vercel 用 `VERCEL_GIT_COMMIT_SHA`，本地构建回落到当前 Git HEAD）：
  *

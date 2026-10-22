@@ -27,9 +27,19 @@ import { CONTRACT_ERROR_EXPLANATIONS, LAYER_ERROR_EXPLANATIONS } from './site-co
 
 /** 本层自己的失败码。**刻意不套用**契约的错误信封形状，理由见 `src/api-proxy.ts`。 */
 export const LAYER_CODES = {
-  /** fetch 抛了（网络断、CSP 拦、代理 502/503 也算不通）。 */
+  /**
+   * `fetch` 自己抛了：网断、DNS 失败、CSP 拦下、请求被 abort。
+   * ⚠️ **不含**同源代理的 502/503 —— 那是代理**正常返回的一个响应**，会走下面
+   * `unexpectedStatus` 那条分支，并由 `toFailure` 把代理自己的 `WEB_API_*` 码原样带出来
+   * （代理的响应体就是 `{code}`，见 `src/api-proxy.ts` 的 `failureResponse`）。
+   * 这条区分是有用的：`WEB_LAYER_NETWORK_ERROR` 意味着请求根本没送到我们自己的服务端，
+   * `WEB_API_UPSTREAM_UNREACHABLE` 意味着送到了、是服务端连不上上游。
+   */
   network: 'WEB_LAYER_NETWORK_ERROR',
-  /** 通了，但状态码不是这条调用约定的那一个。 */
+  /**
+   * 通了，但状态码不是这条调用约定的那一个。
+   * `status` 为 0 只有一种来路：`redirect: 'manual'` 下的 opaqueredirect（见 `toRoutePath`）。
+   */
   unexpectedStatus: 'WEB_LAYER_UNEXPECTED_STATUS',
   /** 状态码对，但响应体不是约定的形状。 */
   badPayload: 'WEB_LAYER_BAD_PAYLOAD',
@@ -94,6 +104,38 @@ async function readBody(response: Response): Promise<unknown> {
 }
 
 /**
+ * 把 API 路径补成**带尾斜杠**的形态。
+ *
+ * 为什么非补不可：`apps/web/next.config.ts` 里 `trailingSlash: true`（ZLQ-190 §7 要求
+ * `/source-and-license/` 这种形态，且明令不许借这次切换摘掉它）。Next 对**所有**路由一视同仁，
+ * 包括 `app/api/[...path]/route.ts` —— 于是 `POST /api/v1/auth/login` 会先吃一个
+ * `308 → /api/v1/auth/login/`，代理处理器根本不会被执行到。
+ *
+ * 而本层的 `fetch` 是 `redirect: 'manual'`（下面有说明），浏览器对 manual 的回应是一个
+ * **opaqueredirect**：status 0、头为空、body 为 null。表现就是四步闭环里每一次调用都失败在
+ * `WEB_LAYER_UNEXPECTED_STATUS`「服务返回了意料之外的状态码」—— 一句真话，但既没指向真因，
+ * 也让学生无从下手。**实测过的缺陷，不是推测**：e2e 点登录时页面上渲染出来的就是这句。
+ *
+ * 两条修法里选了这一条：
+ *   - 改成 `redirect: 'follow'` 也能过，但那就把「一次重定向把错误洗成 200」的门打开了 ——
+ *     上游真发了 3xx 时，客户端会追着跳到哪都不知道，失败与成功的边界重新变模糊。
+ *   - 在**唯一**的出口处把路径补成 Next 认的规范形态，重定向根本不会发生，manual 的语义
+ *     原样保留。选这条。
+ *
+ * 对上游契约**没有影响**：`src/api-proxy.ts` 的 `buildTargetPath` 是按已解码的路径段重新拼
+ * 上游路径的，尾斜杠不产生额外的段，所以转发出去的仍然是 `/api/v1/auth/login`、
+ * `/api/v1/tasks/{id}:pump`（AIP-136 的 `:verb` 后缀也不受牵连）。
+ *
+ * 查询串要单独处理：直接往整条字符串后面补 `/`，`?page=2` 会变成 `?page=2/`。
+ */
+export function toRoutePath(path: string): string {
+  const queryAt = path.indexOf('?');
+  const base = queryAt === -1 ? path : path.slice(0, queryAt);
+  const query = queryAt === -1 ? '' : path.slice(queryAt);
+  return base.endsWith('/') ? `${base}${query}` : `${base}/${query}`;
+}
+
+/**
  * 发一次调用。
  *
  * 任何失败都以 `{ok:false}` 返回而不是抛：四步闭环的 UI 需要把「哪一步、因为什么码」显示
@@ -110,7 +152,7 @@ export async function callApi<T = null>(call: ApiCall): Promise<ApiOutcome<T>> {
 
   let response: Response;
   try {
-    response = await fetch(call.path, {
+    response = await fetch(toRoutePath(call.path), {
       method: call.method,
       headers,
       body: call.body === undefined ? undefined : JSON.stringify(call.body),

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-// 最小静态文件服务器：为 e2e smoke 提供构建产物。服务两份东西，各自一个实例：
-//   - apps/web/out（Next 静态导出的真实部署产物，ZLQ-190 §6.2），需要目录 → index.html；
-//   - 仓库根的 artifacts/（esbuild 合规 bundle），保持原来的白名单前缀形态。
+// 最小静态文件服务器：为 e2e smoke 提供构建产物。
+// ZLQ-232 起它只服务一份东西 —— 仓库根的 artifacts/（esbuild 合规 bundle），
+// 保持白名单前缀形态。站点那一份不再由它承载：apps/web 已翻成服务构建，
+// `apps/web/out` 不复存在，e2e 改由 `next start` 直接起 apps/web/.next（见 playwright.config.ts）。
+// 下面「目录 → index.html」的能力因此在本仓库里暂时没有调用方，但它是这台服务器的既定
+// 边界（ZLQ-190 §6.2 要求过、也有测试钉着），不随这次形态切换删掉。
 //
 // 刻意不做的事：没有 HMR、没有 watch、没有 SPA fallback、**没有目录列表**。
 // ZLQ-190 §6.2 要求它「支持目录 index.html」，这条能力的边界写死在这里：
