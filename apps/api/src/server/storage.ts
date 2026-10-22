@@ -410,6 +410,13 @@ const PROJECT_SELECT_BY_ID_SQL = `SELECT ${PROJECT_COLUMNS} FROM projects WHERE 
  *
  * 游标是 `(updated_at, id)` 的 base64url —— 客户端不解释它，服务端也不该让它可读成
  * 一个可篡改的偏移量。
+ *
+ * `$4` 必须铸成 `uuid` 而不是 `text`：Postgres 在**解析期**就要为行比较的每一对
+ * 列/参数解析出 `<` 运算符，而 `uuid < text` 不存在。写成 text 时这个错误与游标是否
+ * 为 NULL 无关（`OR` 短路是运行期的事），于是**每一次** list 都在计划阶段就炸，表现
+ * 为 `GET /projects` 无条件 500 `INTERNAL_ERROR` —— 而 `envelopeOf` 对非
+ * DomainError / 非 InfraError 的异常一律不回原始 message，所以从响应体上完全看不出
+ * 是运算符解析失败。这条竖切正是被它挡住的。
  */
 const PROJECT_LIST_SQL = `
 SELECT ${PROJECT_COLUMNS} FROM projects
@@ -417,7 +424,7 @@ WHERE owner_student_id = $1
   AND ($2::text IS NULL OR status = $2::text)
   AND (
     $3::timestamptz IS NULL
-    OR (updated_at, id) < ($3::timestamptz, $4::text)
+    OR (updated_at, id) < ($3::timestamptz, $4::uuid)
   )
 ORDER BY updated_at DESC, id
 LIMIT $5`;
