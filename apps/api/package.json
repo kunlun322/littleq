@@ -21,7 +21,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "migrate": "tsc -b && node dist/bootstrap/migrate.js"
   },
   "dependencies": {
     "@littleq/api-contract": "workspace:*",
@@ -30,6 +31,7 @@
     "@littleq/infra": "workspace:*",
     "@littleq/work-contract": "workspace:*",
     "cookie": "2.0.1",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "zod": "4.6.7"
   }
 }
