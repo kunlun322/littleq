@@ -245,7 +245,14 @@ function parseRawEnv(source: EnvSource | undefined): RawFormBEnv {
   }
 }
 
-/** 空白-only 视同未设置：`LITTLEQ_DEPLOYMENT=" "` 不该被当成一个形态。 */
+/**
+ * 空白-only 视同未设置：`LITTLEQ_DEPLOYMENT=" "` 不该被当成一个形态。
+ *
+ * ⚠️ 它对**枚举型**变量（`LITTLEQ_DEPLOYMENT` / `LITTLEQ_ENV` / `VERCEL_ENV`）的空白分支
+ * 其实跑不到：schema 的 `z.enum` 会先把 `'   '` 拒成 `ENV_SCHEMA_INVALID`。真正靠它的是
+ * 两个 `z.string()` 字段 —— `SOURCE_CODE_URL` 与 `VERCEL_GIT_COMMIT_SHA`。留着不是为了
+ * 那两个枚举，而是为了"空白不等于给了值"这条规则在**所有**非秘密字段上说法一致。
+ */
 function present(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
   const trimmed = value.trim();
@@ -283,8 +290,14 @@ function assertNotPooled(connectionString: string, variableName: string): void {
   try {
     hostname = new URL(connectionString).hostname;
   } catch {
-    // 解析不出主机名就没法证明它**不是**池化地址。此时拒绝而不是放过：
-    // 一条静默通过的负向守卫等于没有守卫。消息里只有变量名。
+    hostname = '';
+  }
+  // ⚠️ `hostname === ''` 与「`new URL` 抛了」走同一条拒绝，这不是防御性重复：
+  // `postgres://` 这种**没有主机名**的串在 WHATWG URL 里是**合法**的（非特殊 scheme，
+  // `new URL('postgres://').hostname === ''`，不抛）。只 `try/catch` 的话它会静默通过
+  // `''.includes('-pooler') === false`，于是这条守卫对它自己要挡的东西失败了。
+  // 解析不出主机名就没法证明它**不是**池化地址 —— 拒绝而不是放过。消息里只有变量名。
+  if (hostname === '') {
     throw new BootstrapConfigError(
       'MIGRATION_URL_UNPARSEABLE',
       [variableName],

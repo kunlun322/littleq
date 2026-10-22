@@ -61,6 +61,28 @@ const SENTINELS = {
 const SENTINEL_VALUES: readonly string[] = Object.values(SENTINELS);
 
 /**
+ * 其中**只有这些是凭据**。
+ *
+ * 分开列不是洁癖，而是为了让"配置对象里不许出现哨兵值"这条断言成立：`SOURCE_CODE_URL` 与
+ * `VERCEL_GIT_COMMIT_SHA` 是**公开标识符**（一个 AGPL 源码途径、一个提交号），
+ * `FormBConfig` 本来就该带着它们 —— 上面第 152 行那条用例正是在断言它们**在**。
+ * 把八个哨兵一锅端进"不许出现"的探针，等于写下一条与本文件另一条互相矛盾的断言，
+ * 它永远红（本文件第一版就是这样，而且只在跑全量时才被看见）。
+ *
+ * 于是分工是：
+ * - **凭据子集** ⇒ "不许出现在配置对象 / 错误文本里"（红线 2）。
+ * - **全集** ⇒ "不许出现在错误文本里"（连源码途径也不该被错误消息回显）。
+ */
+const CREDENTIAL_SENTINEL_VALUES: readonly string[] = [
+  SENTINELS.runtimeUser,
+  SENTINELS.runtimePassword,
+  SENTINELS.runtimeHost,
+  SENTINELS.directHost,
+  SENTINELS.directPassword,
+  SENTINELS.masterKey,
+];
+
+/**
  * 运行连接串：**池化**主机名（含 `-pooler`），并且刻意带上 `channel_binding=require`。
  *
  * 带它是为了把 PM 那条实测结论变成一条会红的断言：`pg-connection-string@2.14.1` 对这个
@@ -75,6 +97,24 @@ const RUNTIME_URL =
 const DIRECT_URL =
   `postgres://${SENTINELS.runtimeUser}:${SENTINELS.directPassword}@${SENTINELS.directHost}` +
   ':5432/neondb?sslmode=require';
+
+/**
+ * 一条**规范化会改变**的连接串：查询参数里有个空格，`new URL(...).toString()` 会把它写成 `%20`。
+ *
+ * 为什么需要它 —— 本文件第一版的"逐字透传"阳性对照写的是
+ * `expect(new URL(RUNTIME_URL).toString()).not.toBe(RUNTIME_URL)`，而它对 `RUNTIME_URL`
+ * **永远红**：`postgres:` 是 WHATWG URL 里的**非特殊 scheme**，解析器对它不加尾斜杠、
+ * 不折叠大小写，十六进制凭据也无需转义，于是 `toString()` 恒等于原文。那条对照想证的
+ * 是"规范化会改，而代码没规范化"，实际证的是"规范化不会改" —— 一个恒等变换，
+ * 也就是说"没被规范化"这条断言当时**没有内容**。
+ *
+ * 换上这一条之后对照才成立：同一个函数在这条串上确实会改写它，而 `runtimeConnectionOf`
+ * 交出来的仍是原文（连 `%20` 都不许出现）。空格放在 `application_name` 里也是刻意的 ——
+ * 那是真实 Neon 连接串常带的参数，不是我为了凑一个反例编的形状。
+ */
+const NORMALIZATION_VISIBLE_URL =
+  'postgres://lq_norm_user:lq_norm_pw@ep-lq-norm-pooler.neon.example:5432/neondb' +
+  '?sslmode=require&application_name=lq boot';
 
 /** 一份**完整合法**的形态 B 环境。每条变异对照都只从它出发改一个键。 */
 function validEnv(): EnvSource {
@@ -164,11 +204,20 @@ describe('resolveFormBConfig：合法输入', () => {
     // 阳性对照：这条断言必须**可能**失败，否则它什么都没证。连接串确实在环境里 ——
     // 先证明这一点，再证明它没被抄进配置。
     expect(JSON.stringify(validEnv())).toContain(SENTINELS.runtimeHost);
+    // 第二条阳性对照：凭据子集非空、且真的比全集小 —— 否则"只查子集"可能悄悄退化成
+    // "什么都没查"，或者反过来又撞上面那条"公开标识符本来就该在"的断言。
+    expect(CREDENTIAL_SENTINEL_VALUES.length).toBe(6);
+    expect(CREDENTIAL_SENTINEL_VALUES.length).toBeLessThan(SENTINEL_VALUES.length);
     const serialized = JSON.stringify(config);
-    for (const sentinel of SENTINEL_VALUES) expect(serialized).not.toContain(sentinel);
+    for (const sentinel of CREDENTIAL_SENTINEL_VALUES) {
+      expect(serialized).not.toContain(sentinel);
+    }
     expect(serialized).not.toContain('postgres://');
     // 配置里只有**胜出的变量名**这一个与连接串有关的东西。
     expect(config.runtimeUrlVariable).toBe(FORM_B_ENV_VARS.databaseUrl);
+    // 而这两个公开标识符是**在**的（与上面那条并不矛盾，理由见 CREDENTIAL_SENTINEL_VALUES）。
+    expect(config.sourceCodeUrl).toBe(SENTINELS.sourceCodeUrl);
+    expect(config.commitSha).toBe(SENTINELS.commitSha);
   });
 
   it('只给 LITTLEQ_DATABASE_URL 时它胜出（三个名字都认）', () => {
@@ -183,10 +232,16 @@ describe('resolveFormBConfig：合法输入', () => {
   });
 
   it('没有 VERCEL_ENV 与 LITTLEQ_ENV 时落到 development（本地开发路径）', () => {
-    const env = without(without(validEnv(), FORM_B_ENV_VARS.vercelEnv), FORM_B_ENV_VARS.littleqEnv);
+    // 三个键都要摘：`validEnv()` 里带着 commitSha，只摘两个环境变量的话 `config.commitSha`
+    // 当然还在 —— 本文件第一版就写了 `toBeUndefined()`，于是这条永远红。
+    // "development 下缺提交号也允许起"是**下一条**用例的题，不在这条里顺带断言。
+    const env = without(
+      without(without(validEnv(), FORM_B_ENV_VARS.vercelEnv), FORM_B_ENV_VARS.littleqEnv),
+      FORM_B_ENV_VARS.commitSha,
+    );
     const config = resolveFormBConfig(env);
     expect(config.platformEnv).toBe('development');
-    // development 下没有提交号也允许起：`BUILD_IDENTITY_MISSING` 只针对 production。
+    expect(config.deployment).toBe('B');
     expect(config.commitSha).toBeUndefined();
   });
 
@@ -234,11 +289,20 @@ describe('resolveFormBConfig：拒启矩阵（每条都只改一个变量）', (
     expect(error.variables).toEqual(['LITTLEQ_DEPLOYMENT']);
   });
 
-  it('LITTLEQ_DEPLOYMENT 是空白串 ⇒ 同一条（空白不等于给了值）', () => {
-    expectCode(
+  it('LITTLEQ_DEPLOYMENT 是空白串 ⇒ 同样拒启，但报的是 ENV_SCHEMA_INVALID', () => {
+    // 结论没变（空白不等于给了值 ⇒ 拒绝启动），**码**变了，而且这是有信息量的：
+    // `LITTLEQ_DEPLOYMENT` 在 schema 里是 `z.enum(['A','B','C'])`，`'   '` 过不了枚举，
+    // 于是它连 `resolveFormBConfig` 第 1 步的 `present()` 都到不了。
+    // 本文件第一版期望 `DEPLOYMENT_FORM_MISSING`，那是把两个层次混成了一个：
+    //   缺失（键不在）        ⇒ 到得了第 1 步 ⇒ DEPLOYMENT_FORM_MISSING
+    //   给了但不是合法形态值  ⇒ schema 先拒  ⇒ ENV_SCHEMA_INVALID
+    // 两条都是固定码、都不含输入值（下面 expectCode 里的无泄漏探针会查），运维拿到的
+    // 修复指引因此是准的："这个变量没配" 与 "这个变量配错了" 是两件事。
+    const error = expectCode(
       () => resolveFormBConfig(withValue(validEnv(), FORM_B_ENV_VARS.deployment, '   ')),
-      'DEPLOYMENT_FORM_MISSING',
+      'ENV_SCHEMA_INVALID',
     );
+    expect(error.variables).toEqual(['LITTLEQ_DEPLOYMENT']);
   });
 
   it('形态 A 与形态 C 都 ⇒ DEPLOYMENT_FORM_UNSUPPORTED（不替它们装配）', () => {
@@ -333,16 +397,27 @@ describe('runtimeConnectionOf：逐字原样透传', () => {
     expect(ref.variableName).toBe('DATABASE_URL');
   });
 
-  it('连接串没有被任何 URL 规范化碰过（阳性对照：规范化确实会改变它）', () => {
+  it('连接串没有被 URL 规范化碰过（阳性对照见下一条：规范化在别的串上确实会改）', () => {
     const env = validEnv();
     const ref = runtimeConnectionOf(env, resolveFormBConfig(env));
-    // 阳性对照在前：先证明 `new URL(...).toString()` 与原文**不同**，于是下面那条
-    // "没被规范化"才有内容。若哪天原文恰好等于规范化结果，这条对照会红，提醒重写用例。
-    expect(new URL(ref.connectionString).toString()).not.toBe(ref.connectionString);
+    // ⚠️ 这一条**不配**阳性对照，而且不该配：`new URL(RUNTIME_URL).toString()` 恒等于
+    // `RUNTIME_URL`（非特殊 scheme，见 NORMALIZATION_VISIBLE_URL 的说明）。所以这里的
+    // 断言只说真话 —— 惰性参数活着走出来了；"没被改写"这件事由**下一条**用例证明。
     expect(ref.connectionString).toBe(RUNTIME_URL);
     // `channel_binding=require` 是 PM 实测的惰性参数，必须活着走出来。
     expect(ref.connectionString).toContain('channel_binding=require');
     expect(ref.connectionString).toContain('sslmode=require');
+  });
+
+  it('阳性对照：对一条**规范化确实会改**的串，交出去的仍是原文（逐字透传在这里才有内容）', () => {
+    // 对照先跑：证明这条串进 `new URL` 出来就变了（空格 ⇒ `%20`）。
+    expect(new URL(NORMALIZATION_VISIBLE_URL).toString()).not.toBe(NORMALIZATION_VISIBLE_URL);
+    expect(new URL(NORMALIZATION_VISIBLE_URL).toString()).toContain('%20');
+    const env = withValue(validEnv(), FORM_B_ENV_VARS.databaseUrl, NORMALIZATION_VISIBLE_URL);
+    const ref = runtimeConnectionOf(env, resolveFormBConfig(env));
+    expect(ref.connectionString).toBe(NORMALIZATION_VISIBLE_URL);
+    expect(ref.connectionString).toContain('application_name=lq boot');
+    expect(ref.connectionString).not.toContain('%20');
   });
 
   it('走 LITTLEQ_DATABASE_URL 那一支时同样逐字', () => {
@@ -411,12 +486,21 @@ describe('migrationConnectionOf：只认 DATABASE_DIRECT_URL，且必须不是�
 
   it('解析不出主机名 ⇒ MIGRATION_URL_UNPARSEABLE，而不是静默放行', () => {
     // 一条静默通过的负向守卫等于没有守卫：解析失败时我们**无法证明**它不是池化地址。
+    //
+    // ⚠️ `'postgres://'` 这一项钉的是本单开发中自查出来的一个**真 bug**：
+    // `assertNotPooled` 原本只 `try/catch` 了 `new URL(...)`，而 `postgres:` 是非特殊 scheme，
+    // `new URL('postgres://')` **不抛**、只是 `hostname === ''`，于是它一路走到
+    // `''.includes('-pooler') === false` 被**静默放行** —— 守卫对它自己要挡的东西失败了。
+    // 现在空主机名与"抛了"走同一条拒绝。谁把那个 `hostname === ''` 分支删掉，这条就红。
     for (const bad of ['not-a-url', 'postgres://', '']) {
       expectCode(
         () => migrationConnectionOf(withValue(validEnv(), FORM_B_ENV_VARS.databaseDirectUrl, bad)),
         bad === '' ? 'MIGRATION_URL_MISSING' : 'MIGRATION_URL_UNPARSEABLE',
       );
     }
+    // 变异对照：证明 `postgres://` 确实是被**空主机名**这条拦下的，不是碰巧被别的分支拦下。
+    expect(new URL('postgres://').hostname).toBe('');
+    expect(() => new URL('postgres://')).not.toThrow();
   });
 
   it('首尾空白先于池化判定报出（顺序要紧：new URL 对空白会抛，那样报出来的是错的码）', () => {
@@ -433,8 +517,22 @@ describe('migrationConnectionOf：只认 DATABASE_DIRECT_URL，且必须不是�
 
   it('迁移串也逐字透传，sslmode 一个字符都不动', () => {
     const ref = migrationConnectionOf(validEnv());
+    expect(ref.connectionString).toBe(DIRECT_URL);
     expect(ref.connectionString).toContain('sslmode=require');
-    expect(new URL(ref.connectionString).toString()).not.toBe(ref.connectionString);
+    // 同上一条：这里不配 `new URL` 对照（对这条串它是恒等变换）。真正的对照在下面那条，
+    // 用一条规范化会改写的**直连**串来证。
+  });
+
+  it('阳性对照：迁移串也扛得住规范化（换成一条 `new URL` 会改写的直连串）', () => {
+    // 直连版：把 NORMALIZATION_VISIBLE_URL 的 `-pooler` 去掉，否则先撞上 MIGRATION_URL_IS_POOLED，
+    // 那条断言就不再是关于"逐字"的了。
+    const direct = NORMALIZATION_VISIBLE_URL.replace('-pooler.neon.example', '.neon.example');
+    expect(direct).not.toContain('-pooler');
+    expect(new URL(direct).toString()).not.toBe(direct);
+    const ref = migrationConnectionOf(withValue(validEnv(), FORM_B_ENV_VARS.databaseDirectUrl, direct));
+    expect(ref.connectionString).toBe(direct);
+    expect(ref.connectionString).not.toContain('%20');
+    expect(ref.variableName).toBe('DATABASE_DIRECT_URL');
   });
 });
 
