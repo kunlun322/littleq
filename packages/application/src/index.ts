@@ -7,12 +7,14 @@
  * SDK」。在 F1 之前它还不存在：装配端口无处可放 —— 放 domain 会把持久化概念漏进业务
  * 事实源，放 infra 则 F2 的用例必须反向依赖驱动包。
  *
- * ## F1 只拥有 ports
+ * ## ports 归 F1，use-cases 归 F2
  *
- * §10.2 逐字：「application 内部由 **F1 拥有 ports、F2 拥有 use-cases**。」所以本包
- * 现在的内容**只有类型与少量纯函数**：两个装配端口（`TaskPumpStore` /
- * `TaskUnitOfWork`）、`task_private` 的完整记录形态、以及租约句柄。
- * 登录、创建项目、创建 turn、`:pump` 的业务编排一律**不在**这里，它们归 F2。
+ * §10.2 逐字：「application 内部由 **F1 拥有 ports、F2 拥有 use-cases**。」所以
+ * `ports/` 目录下是 F1 交出来的两个装配端口（`TaskPumpStore` /
+ * `TaskUnitOfWork`）、`task_private` 的完整记录形态、以及租约句柄；`usecases/`
+ * 目录下是 F2 的业务编排 —— 登录、创建项目、创建 turn、`:pump` 短步驱动。
+ * F2 **不改 `ports/` 里任何形状**：新用例需要的存储端口写在
+ * `usecases/ports.ts`（所有权跟着用例走），端口形状不够用时按 §3 停下问 PM。
  *
  * ## 边界
  *
@@ -42,3 +44,16 @@ export * from './task-lease.js';
 export * from './task-private.js';
 export * from './ports/task-pump-store.js';
 export * from './ports/task-unit-of-work.js';
+
+// F2 拥有的用例层（§10.2）。`usecases/ports.ts` 里的 `SECRET_PURPOSES` /
+// `SecretPurpose` / `InternalSecretMetadata` 与 infra 的同名导出**逐字同形**，
+// 重述的理由与 `task-lease.ts` 一致：本包不导入 infra，否则 `tsc -b` 的项目引用成环。
+export * from './usecases/ports.js';
+export * from './usecases/authorization.js';
+export * from './usecases/auth.js';
+export * from './usecases/projects.js';
+export * from './usecases/secrets.js';
+export * from './usecases/turns.js';
+export * from './usecases/tasks.js';
+export * from './usecases/pump.js';
+export * from './usecases/preview.js';
