@@ -369,9 +369,28 @@ describe('安全与范围约束（§8 D6 / §9 D7）', () => {
     // 只匹配**配置项**（行首缩进 + 键 + :/(/=），不匹配注释里的散文 ——
     // next.config.ts 的头部注释刻意写明了「不配 rewrites / redirects」，那是说明不是配置。
     expect(config).not.toMatch(/^\s*(rewrites|redirects|headers|proxy)\s*[:=(]/m);
-    // output:'export' 是「这是一个静态站点」的机器可检事实；它被改掉，站点就不再可部署到静态托管。
-    expect(config).toContain("output: 'export'");
     expect(config).toContain('unoptimized: true');
+    // Q3-补-2：`trailingSlash: true` 不许借这次切换顺手摘掉（`/source-and-license/` 的
+    // 尾斜杠形态对齐在它上面），所以它是正向钉子，和下面的反向钉子一样走行首锚定。
+    expect(config).toMatch(/^\s*trailingSlash\s*:\s*true\s*,/m);
+  });
+
+  it('构建形态是服务构建：静态导出那个键不在配置对象里（附阳性对照）', () => {
+    // ZLQ-232 按 Q3 裁定把 apps/web 翻成服务构建，旧版那条 `toContain("output: 'export'")`
+    // 因此反转。反转之后仍然必须**行首锚定**：next.config.ts 的头部注释在解释这个键
+    // 为什么被移除，全文 includes 会被那句说明绊住 —— 而一条被自己的说明绊红的门，
+    // 之后再也分不清「真的退回了静态导出」和「碰巧又提到这个词」。
+    const directive = /^\s*output\s*:/m;
+    // 阳性对照：这个正则确实抓得住配置对象里的静态导出声明，且不被散文与别的键骗过。
+    expect(directive.test("const nextConfig = {\n  output: 'export',\n};")).toBe(true);
+    expect(directive.test(' * 只移除了 output 取 export 那一行')).toBe(false);
+    expect(directive.test('const nextConfig = {\n  trailingSlash: true,\n};')).toBe(false);
+
+    const config = read('next.config.ts');
+    expect(config).not.toMatch(directive);
+    // 反向对照：去注释后配置对象里剩下的键就是这四个，多一个「静态导出」都会让上面变红。
+    const keys = [...stripComments(config).matchAll(/^\s{2}([A-Za-z]+)\s*:/gm)].map((m) => m[1]);
+    expect(keys).toEqual(['trailingSlash', 'images', 'transpilePackages', 'reactStrictMode']);
   });
 
   it('不得依赖服务端单元（§9）', () => {
