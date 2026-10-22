@@ -288,6 +288,15 @@ export async function createTurnUseCase(
     softDeadlineAt: softDeadlineAt(input.now, TURN_SOFT_DEADLINE_SECONDS),
     hardDeadlineAt: hardDeadlineAt(input.now, HARD_DEADLINE_MINUTES),
     createdAt: input.now,
+    /**
+     * 显式给 `'1'`，不用 domain 的默认值 `'0'`：§3.2 对 `ai_tasks` 逐字写的是
+     * `revision bigint NOT NULL CHECK (revision > 0)`，而 F1 的 `taskInsertParams`
+     * 在写入边界调 `assertPersistableRevision` 大声拒绝 `'0'`。这一格不是"初值偏好"，
+     * 是受理能不能落库的前提；漏掉它，`createTurn` 对真库永远 400。
+     *
+     * 与 `createProjectUseCase` 的同名修正是同一处规格冲突的两个断面（已一并申报）。
+     */
+    revision: '1',
   });
 
   const privateState: TaskPrivateRecord = createTaskPrivateRecord({

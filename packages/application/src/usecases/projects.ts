@@ -108,8 +108,18 @@ export interface CreateProjectInput {
  * `createProjectRequestSchema` 也不含它，所以"客户端指定别人"这条路在解析阶段就不存在。
  * OWNER 调到这里得到 `FORBIDDEN_CAPABILITY`，不会被隐式当成学生（§4.2）。
  *
- * `revision` / `status` 用 domain 的默认值而不是在这里写死：初值属于实体的构造规则，
- * 抄一份到这里就有了第二个事实源。
+ * `status` 用 domain 的默认值而不是在这里写死：初值属于实体的构造规则，抄一份到这里就有了
+ * 第二个事实源。
+ *
+ * ⚠️ `revision` **必须**显式给 `'1'`，这是对本文件此前「revision 也用 domain 默认值」那句
+ * 判定的**修正**（已申报）：domain 的默认值是 `'0'`，而 §3.2 对 `projects` 逐字写的是
+ * `revision bigint NOT NULL CHECK (revision > 0)`，infra 的 `assertPersistableRevision`
+ * 也正是为此而在写入边界大声拒绝 `'0'`。两边都不是本单能改的（DDL 是冻结规格，
+ * `packages/domain` 与 `packages/infra` 不在文件面内），所以只能在**构造点**把这一格补上。
+ *
+ * 不在 `ProjectDirectory.insert` 里悄悄归一成 `'1'`：那样调用方手里的实体（`'0'`）与库里的
+ * 行（`1`）从此不同，而 `createProjectUseCase` 是把实体**直接返回**给 HTTP 层的 ——
+ * 响应里的 `ETag: "rev-0"` 会让客户端的第一次 `If-Match` 永远 409。
  */
 export async function createProjectUseCase(
   services: ProjectServices,
@@ -125,6 +135,7 @@ export async function createProjectUseCase(
     helpLevel: input.helpLevel,
     templateId: input.templateId,
     currentVersionId: null,
+    revision: '1',
     createdAt: input.now,
     updatedAt: input.now,
   });

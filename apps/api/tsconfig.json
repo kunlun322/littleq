@@ -8,6 +8,8 @@
   "include": ["src"],
   "references": [
     { "path": "../../packages/domain" },
+    { "path": "../../packages/application" },
+    { "path": "../../packages/api-contract" },
     { "path": "../../packages/infra" },
     { "path": "../../packages/work-contract" }
   ]

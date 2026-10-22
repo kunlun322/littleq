@@ -55,8 +55,12 @@ const UNITS = [
   'packages/work-contract',
 ];
 
-// ZLQ-194 §9.2 点名的二个「本该装后端」的单元：本单结束时它们必须仍然全部是 skeleton。
-const SKELETON_UNITS = ['apps/api', 'apps/worker'];
+// ZLQ-194 §9.2 点名的二个「本该装后端」的单元，在 ZLQ-195 结束时必须仍然全部是 skeleton。
+// ZLQ-221（B1）把 `apps/api` 从这份名单里**毕业**了：它现在带 `unitReadiness` 声明、
+// `skeletonOnly: false`，并且有契约点名的黑盒证明 `turn-to-task-to-safe-event`。
+// `apps/worker` 不在那一单的范围里，保持 skeleton —— 它毕业时要走同一条路：翻
+// `skeletonOnly`、补声明、补黑盒证明，三件事在同一个提交里。
+const SKELETON_UNITS = ['apps/worker'];
 
 const contract = JSON.parse(readFileSync(CONTRACT, 'utf8'));
 
@@ -134,7 +138,7 @@ describe('真实仓库的就绪门禁', () => {
     expect(result.contractedButAbsent).toEqual([]);
   });
 
-  it('本单结束时二个后端单元仍然全部是 skeleton（ZLQ-195 §3.1 的硬条件）', () => {
+  it('仍未毕业的后端单元保持 skeleton，其余单元一律 implemented（ZLQ-195 §3.1 的硬条件）', () => {
     const resolved = Object.fromEntries(scan(REPO_ROOT).resolvedStatus.map((r) => [r.unit, r]));
     for (const unit of SKELETON_UNITS) expect(resolved[unit].status, unit).toBe('skeleton');
     for (const unit of UNITS.filter((item) => !SKELETON_UNITS.includes(item)))
