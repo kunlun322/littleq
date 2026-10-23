@@ -33,6 +33,10 @@ import {
   SCOPE_DELIVERED_ITEMS,
   SCOPE_UNAVAILABLE_HEADING,
   SCOPE_UNAVAILABLE_ITEMS,
+  SETTINGS_ALREADY_CONFIGURED_NOTE,
+  SETTINGS_HEADING,
+  SETTINGS_NEEDS_LOGIN_HEADING,
+  SETTINGS_PATH,
   SITE_NAME,
   SOURCE_AND_LICENSE_PATH,
   STATUS_BODY,
@@ -622,6 +626,37 @@ test.describe('四步闭环的入口（无后端也能证的那一半）', () =>
     await expectEveryActionIsReal(page, request);
   });
 
+  test('未登录时凭据设置页如实说要登录，那句「配好也改不了」的披露照样在页面上', async ({
+    page,
+    request,
+  }) => {
+    await page.goto(SETTINGS_PATH);
+
+    await expect(page.locator('h1')).toHaveText(SETTINGS_HEADING);
+    await expect(page.getByText(SETTINGS_NEEDS_LOGIN_HEADING)).toHaveCount(1);
+    await expect(page.locator('.lq-cta')).toHaveText([NAV_LOGIN_LABEL]);
+    await expect(page.locator('.lq-cta')).toHaveAttribute('href', LOGIN_PATH);
+
+    // ZLQ-241：这句披露是「凭据存进去之后这一版改不了」的**用户侧告知**，此前整页零 e2e、
+    // 零单测 —— 删掉它或把它改软，七道门全绿。vitest 那三条守的是源码文本；这一条守的是
+    // **部署产物**：它渲染在 `app/settings/page.tsx` 那个「有没有会话」的三元**之外**，
+    // 所以未登录也必须看得到。少这一条，「未登录时页面只剩一个空壳」不会被任何人发现。
+    //
+    // 用 `.lq-hint` 定位而不是 `getByText`：Next 会把服务端组件的渲染结果**同时**塞进
+    // HTML 里的 RSC flight 脚本，裸文本匹配可能数出两份（一份 DOM、一份脚本），
+    // 而脚本标签没有这个类名，所以类名定位既精确又不受那份副本影响。
+    const disclosure = page.locator('.lq-hint', { hasText: SETTINGS_ALREADY_CONFIGURED_NOTE });
+    await expect(disclosure).toHaveCount(1);
+    // 精确相等（Playwright 会归一化空白）：只断言「包含」的话，把这句话改软一半也能过。
+    await expect(disclosure).toHaveText(SETTINGS_ALREADY_CONFIGURED_NOTE);
+    // ⚠️ 但这一条**测不出文案被改软**，别指望它替代 vitest 那三条：两边读的是同一个常量，
+    // 改文案会同时改掉期望值。实测过（把「不能更换」改成「也可以更换」重新构建）：本条照绿、
+    // `apps/web/test/index.test.ts` 的那条染红。所以分工是固定的 —— **内容**归 vitest，
+    // **「未登录也真的渲染在部署产物里」**归这一条；两臂各自单独证明过会咬人。
+
+    await expectEveryActionIsReal(page, request);
+  });
+
   test('代理响应一律不发 CORS 放宽头，浏览器打过去的请求全部同源', async ({ request }) => {
     // ⚠️ 这里**测不到 CSP 响应头本身**，不是漏了：CSP 写在 `vercel.json` 的 `headers` 里，
     // 那是 Vercel 平台专属机制，`next start` 不读它；而仓库内唯一能让 `next start` 发头的
@@ -666,7 +701,7 @@ test.describe('四步闭环的入口（无后端也能证的那一半）', () =>
     // §8 D6 的补偿控制：apps/web 服务端不持有凭证，目标只来自一个环境变量。
     // 这条从**部署产物**取证：渲染出来的 HTML 里不该出现任何上游地址，
     // 否则前端就等于把 API origin 泄露给了浏览器，「禁止浏览器直连 API」也就成了空话。
-    for (const path of ['/', LOGIN_PATH, CREATE_PATH, SOURCE_AND_LICENSE_PATH]) {
+    for (const path of ['/', LOGIN_PATH, CREATE_PATH, SETTINGS_PATH, SOURCE_AND_LICENSE_PATH]) {
       const response = await request.get(`${SITE_ORIGIN}${path}`);
       expect(response.status(), `${path} 取不到，下面那几条 not.toContain 就是空转`).toBe(200);
       const body = await response.text();

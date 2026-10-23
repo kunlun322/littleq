@@ -41,6 +41,7 @@ import {
   SCOPE_DELIVERED_ITEMS,
   SCOPE_UNAVAILABLE_HEADING,
   SCOPE_UNAVAILABLE_ITEMS,
+  SETTINGS_ALREADY_CONFIGURED_NOTE,
   SETTINGS_PATH,
   SITE_NAME,
   SOURCE_AND_LICENSE_PATH,
@@ -205,6 +206,12 @@ describe('首页文案（§5.1 的六个区块）', () => {
     return path === '/' ? 'app/page.tsx' : `app/${path.slice(1, -1)}/page.tsx`;
   }
 
+  /** 差集：`a` 里有、`b` 里没有的元素，按 `a` 的原序返回（所以失败信息里点得出是谁）。 */
+  function missingFrom(a: readonly string[], b: readonly string[]): string[] {
+    const inB = new Set(b);
+    return a.filter((item) => !inB.has(item));
+  }
+
   it('「本次已交付」里每一项都有一个真能走进去的页面（ZLQ-236 验收项 A）', () => {
     // 这一条要挡住的缺陷是**真实发生过的**：首页把「成人 AI 凭据录入」写在「本次已交付」里，
     // 而路由表里根本没有那个页面 —— 文案在宣称一个不存在的能力，而既有 e2e 抓不住它，
@@ -214,10 +221,15 @@ describe('首页文案（§5.1 的六个区块）', () => {
     //   少一个键 ⇒ 首页那一项渲染时取不到 href（TS 也会红，运行时同样要挡住）；
     //   多一个键 ⇒ 有人给一个已经不再宣称的能力留了入口，或改文案时忘了同步。
     // 两种情况都意味着这张表不再是「已交付清单」的镜像。
-    const declared = [...SCOPE_DELIVERED_ITEMS].sort();
-    const mapped = Object.keys(SCOPE_DELIVERED_ENTRIES).sort();
-    expect(mapped, '有文案宣称的能力没有对应入口').toEqual(declared);
-    expect(declared, '有入口的能力不在「本次已交付」文案里').toEqual(mapped);
+    //
+    // 但**写法**不能是「一句 toEqual 再补一句反向 toEqual」（ZLQ-242）：第一句一旦
+    // 抛出，第二句结构上永远跑不到，于是它不是「反向钉子」而是死代码；而第一句的文案
+    // 只描述「少一个键」那个方向，却对**两个方向的差**都报同一句话 —— 多出一个孤儿入口
+    // 时，读到的失败信息正好指错方向。改成两个**各自独立**的差集，各说各的话、点名多出来的键。
+    const declared: string[] = [...SCOPE_DELIVERED_ITEMS];
+    const mapped: string[] = Object.keys(SCOPE_DELIVERED_ENTRIES);
+    expect(missingFrom(declared, mapped), '有文案宣称的能力没有对应入口').toEqual([]);
+    expect(missingFrom(mapped, declared), '有入口的能力不在「本次已交付」文案里').toEqual([]);
 
     // 每条路径都必须在 `app/` 下真有 page.tsx，且带尾斜杠（`trailingSlash: true`）。
     for (const path of Object.values(SCOPE_DELIVERED_ENTRIES)) {
@@ -242,6 +254,16 @@ describe('首页文案（§5.1 的六个区块）', () => {
     expect(existsSync(join(PACKAGE_ROOT, pageFileOf('/no-such-page/')))).toBe(false);
     expect(pageFileOf('/')).toBe('app/page.tsx');
     expect(existsSync(join(PACKAGE_ROOT, pageFileOf('/')))).toBe(true);
+
+    // 反空对照（差集判据，两臂）：拿真数据各造一次缺口，证明两个方向都咬人、都点得出名字，
+    // 而且**互不串台** —— 少一个入口只红第一条，多一个孤儿入口只红第二条。
+    // 少了这一段，把 `missingFrom` 写成 `() => []` 也能让上面两条全绿。
+    const probe = declared[0] ?? '';
+    expect(probe).not.toBe('');
+    expect(missingFrom(declared, mapped.filter((key) => key !== probe))).toEqual([probe]);
+    expect(missingFrom(mapped.filter((key) => key !== probe), declared)).toEqual([]);
+    expect(missingFrom(mapped, declared.filter((item) => item !== probe))).toEqual([probe]);
+    expect(missingFrom(mapped, declared.concat(probe))).toEqual([]);
   });
 
   it('分龄区块的标题存在，且三档元数据全部来自设计系统包而不是本地副本', () => {
@@ -286,6 +308,89 @@ describe('首页文案（§5.1 的六个区块）', () => {
     expect(page).toContain('SCOPE_DELIVERED_ITEMS');
     expect(page).not.toContain(STATUS_HEADING);
     expect(page).not.toContain(SCOPE_UNAVAILABLE_ITEMS[0] ?? '');
+  });
+});
+
+describe('凭据设置页的用户可见披露（ZLQ-241）', () => {
+  // 「配好之后这一页改不动」是**冻结安全设计的用户侧告知**：填错一个令牌的人只能靠这句话
+  // 知道要重新部署才能纠正。ZLQ-241 实测出它此前**没有任何可执行断言看守** —— 常量只有
+  // 「定义」与「渲染」两处引用，没有第三处；e2e 从来没打开过 `/settings/`。删掉它、或把它
+  // 改软，七道门会全部继续保持绿。
+  //
+  // ⚠️ **申报：这一组刻意没有钉住文案的最后半句「创作链路照常可用」。**
+  // 那半句在本轮交付的产物上不成立：`apps/api` 的 Vercel 入口没有注入 provider 腿
+  // （`apps/api/src/bootstrap/function.ts`），缺腿时容器装的是失败关闭的 provider，AI 那一环
+  // 一律 `INTERNAL_ERROR`；把已存凭据变成运行期 provider 客户端是 ZLQ-244，不在本轮范围内。
+  // 所以这里只钉**已逐条核实为真**的那部分（见下面第二条的注释），不把一个本轮兑现不了的
+  // 承诺写成契约 —— 那等于用测试替它背书。文案本身一个字没改：改用户可见文案是产品决定，
+  // 已在 ZLQ-236 的交付评论里申报，等裁定。
+  const SETTINGS_PAGE = 'app/settings/page.tsx';
+  const NOTE: string = SETTINGS_ALREADY_CONFIGURED_NOTE;
+
+  it('那句披露被设置页**渲染**出来，不是只 import 了不用', () => {
+    const page = read(SETTINGS_PAGE);
+    // 判据取 JSX 表达式容器形态。只断言「文件里出现过这个标识符」挡不住 ZLQ-241 点名的
+    // 第二种删除方式 —— 把 `:129` 那个 `<p>` 摘掉而留着 import，标识符仍然在文件里。
+    const rendered = /\{\s*SETTINGS_ALREADY_CONFIGURED_NOTE\s*\}/;
+    // 阳性对照：抓得住真渲染，抓不住「只 import」，也抓不住解释它的那段注释。
+    expect(rendered.test('<p className="lq-hint">{SETTINGS_ALREADY_CONFIGURED_NOTE}</p>')).toBe(
+      true,
+    );
+    expect(rendered.test('  SETTINGS_ALREADY_CONFIGURED_NOTE,\n} from "../../src/site-content"')).toBe(
+      false,
+    );
+    expect(rendered.test('// 常驻说明 SETTINGS_ALREADY_CONFIGURED_NOTE')).toBe(false);
+
+    expect(page).toMatch(rendered);
+    // 文案的唯一出处仍是 site-content.ts：页面里出现整句字面量就等于抄了第二遍，
+    // 与首页那条「引用常量而不是重抄」同一口径。
+    expect(page).not.toContain(NOTE);
+    // 反空对照：NOTE 非空。空串会让上面那条 not.toContain 恒绿、下面三条 toContain 恒红，
+    // 两种都是「门在空转」而不是「事实在位」。
+    expect(NOTE.length).toBeGreaterThan(20);
+  });
+
+  it('披露里那三条事实各自钉住，改软任何一条都红', () => {
+    // 三条都按**当前代码与契约的真实形态**核过（2026-10-23，head 9375eaf2 之上）：
+    //   ① 「不能在这一页上更换或撤销」—— `packages/application/src/usecases/secrets.ts` 的
+    //      `putSecretUseCase`：PUT 幂等，首次配置与**同值**重写都回 204；已配置且**异值**时
+    //      infra 抛 `SECRET_ALREADY_CONFIGURED`（对外 `REVISION_CONFLICT`，409），而该层
+    //      **刻意不**自动回退到 `:rotate`。所以「换一个新值」在本页确实做不到。
+    //      ⚠️ 钉的是「更换」，不是「再保存一次」—— 后者是允许的，别把文案改窄成「存过就不能再存」。
+    //   ② 「接口尚未接线」—— `:rotate` / `:revoke` 在契约里**已声明**
+    //      （`packages/api-contract/src/operations.ts` 的 `rotateSecret` / `revokeSecret`），
+    //      但没有实现、因此没被注册进 `apps/api` 的 `ROUTES`，落统一 404。
+    //      「接线」是本仓自己的词（`http.ts`：「没实现的那些不注册进 ROUTES」），说的是
+    //      **接线**不是**声明** ⇒ 与契约不冲突，不构成需要申报的不一致。
+    //   ③ 「没有那两个按钮」—— 前端根本没有那两条路径（下面第三条从源码侧钉住），
+    //      `app/_components/credentials-form.tsx` 里连一个 `type="button"` 都没有。
+    expect(NOTE).toContain('不能在这一页上更换或撤销');
+    expect(NOTE).toContain('接口尚未接线');
+    expect(NOTE).toContain('没有那两个按钮');
+    // 反向钉子，与上面三条正向钉子互补：只钉正向的话，在句尾**追加**一句「也可以随时更换」
+    // 不会让任何一条正向断言变红，而用户读到的正是那句追加。
+    const softened = /可以(?:随时)?(?:更换|撤销|修改)/;
+    expect(softened.test('配好之后也可以随时更换')).toBe(true);
+    expect(softened.test(NOTE), '披露被改软成了「可以改」').toBe(false);
+  });
+
+  it('披露与「更换 / 撤销确实没接线」绑在一起：接线了就必须改文案', () => {
+    // `api-wire.test.ts` 里已有一条钉住「前端没有 rotate / revoke 路径」，那条守的是
+    // **不许造假入口**；这一条守的是另一件事 —— 那句用户可见的披露**不许过期**。
+    // 两条刻意重叠：谁把 `:rotate` 接进 `PATHS`，两条都会红，而这一条的失败信息直接指向文案。
+    const wire = stripComments(read('src/api-wire.ts'));
+    // 阳性对照：`stripComments` 保留字符串字面量，所以代码里真写了 `':rotate'` 一定被抓到；
+    // 注释里提到它则不算 —— `apps/web` 下有三处注释正在解释「为什么没有这两个按钮」，
+    // 不去注释的话这条门会被它自己的说明绊红，从此再也分不清真假。
+    expect(stripComments("const p = '/settings/secrets/{kind}:rotate';")).toContain(':rotate');
+    expect(stripComments('// 真正的更换要走 :rotate')).not.toContain(':rotate');
+    for (const verb of [':rotate', ':revoke']) {
+      expect(
+        wire,
+        `${verb} 已经出现在 src/api-wire.ts 的代码里 ⇒ 「更换与撤销的接口尚未接线」这句披露` +
+          `已过期，必须同步 apps/web/src/site-content.ts 的 SETTINGS_ALREADY_CONFIGURED_NOTE`,
+      ).not.toContain(verb);
+    }
   });
 });
 

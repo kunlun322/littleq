@@ -82,7 +82,8 @@ export const SCOPE_DELIVERED_ITEMS = [
  *
  * 所以判据换成可执行的事实，两条：
  *
- * 1. 本表的键集合与 `SCOPE_DELIVERED_ITEMS` **完全相等**（`test/index.test.ts` 两侧都断言）。
+ * 1. 本表的键集合与 `SCOPE_DELIVERED_ITEMS` **完全相等**（`test/index.test.ts` 用两个
+ *    **各自独立**的差集断言，每个方向报自己的话并点名多出来的键）。
  *    加一项文案却忘了给入口 ⇒ 红；删掉入口却留着文案 ⇒ 红。
  * 2. 每个路径在 `app/` 下真的有 `page.tsx`（逐条 `existsSync`），且首页真的把它渲染成链接
  *    —— 于是 e2e 的 `expectEveryActionIsReal` 会把它当普通链接实测一遍 200。
