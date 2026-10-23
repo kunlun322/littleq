@@ -9,6 +9,13 @@
  * 的"首个口令"前提至今未满足，一个读 `process.env` 的入口在这一单里既跑不起来也
  * 测不了，只会变成一段无证据的自述代码。
  *
+ * ✅ **后续更正（F4）**：那个进程入口已经交付，在 `src/bootstrap/function.ts`
+ * （Vercel 函数处理器，`export default` 一个 `(req, res)`；平台函数文件是
+ * `apps/api/api/v1/[...path].js`，配置是 `apps/api/vercel.json`），装配根在
+ * `src/bootstrap/vercel.ts`，迁移入口在 `src/bootstrap/migrate.ts`。
+ * ⚠️ 上面那句关于 `bootstrapAccounts` / "首个口令"的申报**仍然成立**：领取入口那条路
+ * 至今没有 owner，见 ZLQ-243。本 barrel 也**仍然**不 re-export `./bootstrap`（理由同下）。
+ *
  * 边界（ZLQ-153 §1.3 / §5.4）：
  *
  * - 驱动选择只发生在组合根（本文件所在层），domain 只见端口不见实现。

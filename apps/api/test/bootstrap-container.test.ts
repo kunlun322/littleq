@@ -51,17 +51,23 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { parseSessionTtlPolicy } from '@littleq/domain';
+import { DomainError, isErrorCode, parseSessionTtlPolicy } from '@littleq/domain';
 import { isInfraError } from '@littleq/infra';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// ⚠️ 相对源码导入（申报）。`createWorkScanner` 这个**值**在 `@littleq/work-contract` 的
-// 桶里是刻意不 re-export 的，而子路径 `@littleq/work-contract/scan` 从 `apps/api` 解析不到
-// （实测 `Cannot find package`）。仓库里已有的先例就是这么办的：
-// `apps/api/test/turn-to-task-to-safe-event.test.ts:70`。
-import { createWorkScanner } from '../../../packages/work-contract/src/scan/index.js';
+// ⚠️ 子路径导入，不是桶导入。`createWorkScanner` 这个**值**在 `@littleq/work-contract` 的
+// 桶里是刻意不 re-export 的（那个 barrel 的文件头写明原因：会把 acorn / parse5 / postcss
+// 拖进浏览器产物）。
+//
+// 本行**曾经**是相对源码导入，申报的理由是"子路径从 `apps/api` 解析不到"。那条申报本轮已
+// 更正：真实 Node 一直解析得到，解析不到的只有 vitest（共享别名表把
+// `@littleq/work-contract` 映射到 `src/index.ts` 这个**文件**，前缀匹配把子路径拼成
+// `src/index.ts/scan`）⇒ `vitest.config.ts` 补了一条子路径别名，只影响测试解析、不进 bundle。
+// 生产入口 `apps/api/src/bootstrap/function.ts` 用的就是这个说明符，所以测试也用同一条路径：
+// 否则"子路径在测试里解析不到"这个回归没人守。
+import { createWorkScanner } from '@littleq/work-contract/scan';
 
-import { BootstrapConfigError, FORM_B_ENV_VARS } from '../src/bootstrap/config.js';
+import { FORM_B_ENV_VARS } from '../src/bootstrap/config.js';
 import {
   READY_BUDGET_MS,
   createFormBContainer,
@@ -300,23 +306,6 @@ describe('形态 B 装配根：致命配置错误拒绝装配（§2.1「拒绝�
     if (isInfraError(error)) expect(error.code).toBe('MASTER_KEY_UNAVAILABLE');
   });
 
-  it('provider 腿没注入 ⇒ PROVIDER_CONFIG_UNREGISTERED（不编占位 provider）', async () => {
-    const inputs = inputsFor(validEnv());
-    const error: unknown = await createFormBContainer({
-      ...inputs,
-      provider: undefined,
-      providerConfiguration: undefined,
-    }).then(
-      () => null,
-      (thrown: unknown) => thrown,
-    );
-    expect(error).toBeInstanceOf(BootstrapConfigError);
-    if (error instanceof BootstrapConfigError) {
-      expect(error.code).toBe('PROVIDER_CONFIG_UNREGISTERED');
-      expectNoSentinel(describeOf(error));
-    }
-  });
-
   it('以上每一种失败都不泄漏哨兵，也不返回半成品容器', async () => {
     const cases: readonly Record<string, string | undefined>[] = [
       validEnv({ [FORM_B_ENV_VARS.deployment]: undefined }),
@@ -337,6 +326,179 @@ describe('形态 B 装配根：致命配置错误拒绝装配（§2.1「拒绝�
       expect(error, `这组环境本该拒启：${JSON.stringify(Object.keys(env))}`).not.toBeNull();
       expectNoSentinel(describeOf(error));
     }
+  });
+});
+
+/**
+ * ## 🚨 变异对照：拿掉 provider 注入，进程必须**仍然 live**
+ *
+ * 这一组是本轮改动的核心证据。判据**不是**"没抛错"—— 派单逐字要求「断言进程 live 且
+ * 业务端点按冻结码拒」。所以两臂都真的起进程、真的打 HTTP：
+ *
+ * - **对照臂**：provider 与 providerConfiguration 都注入（生产配好之后的样子）。
+ * - **变异臂**：两个字段都不给（今天线上真实的样子 —— 没有任何环境变量能产出这条腿）。
+ *
+ * 两臂必须给出**同一份** live / ready / 业务端点结论；唯一允许分岔的是
+ * `providerLegConfigured` 与 AI 那条腿的失败方式。这个"必须相同"本身就是对照：
+ * 如果 ready 的判据里混进了 provider（§8.1 明令「禁止外部AI测试」），变异臂的 ready
+ * 就会与对照臂不同，第 3 条当场红。反过来，如果 `providerLegConfigured` 是个常量，
+ * 第 1 条红 —— 一条对任何实现都成立的断言不算证据。
+ */
+describe('provider 腿缺注入 ⇒ degraded 而不是拒启（§2.1 line 77 / §8.1）', () => {
+  type Arm = {
+    readonly container: FormBContainer;
+    readonly baseUrl: string;
+    close(): Promise<void>;
+  };
+
+  async function startArm(inputs: FormBBootstrapInputs): Promise<Arm> {
+    const container = await createFormBContainer(inputs);
+    const listening = await container.listen(0);
+    return {
+      container,
+      baseUrl: listening.baseUrl,
+      close: async () => {
+        await listening.close();
+        await container.close();
+      },
+    };
+  }
+
+  let control: Arm;
+  let degraded: Arm;
+
+  beforeAll(async () => {
+    control = await startArm(inputsFor(validEnv()));
+    degraded = await startArm({
+      ...inputsFor(validEnv()),
+      provider: undefined,
+      providerConfiguration: undefined,
+    });
+  });
+
+  afterAll(async () => {
+    if (degraded !== undefined) await degraded.close();
+    if (control !== undefined) await control.close();
+  });
+
+  it('两臂都装配成功；degraded 被如实记在容器上，且这个标记不是常量', () => {
+    // 装配成功只是**前提**，不是结论 —— 真正的结论在下面四条 HTTP 断言里。
+    expect(control.container.providerLegConfigured).toBe(true);
+    expect(degraded.container.providerLegConfigured).toBe(false);
+  });
+
+  it('进程 live：变异臂上 GET /api/v1/health/live 照样 200', async () => {
+    const { status, body } = await getJson(degraded.baseUrl, '/api/v1/health/live');
+    expect(status).toBe(200);
+    expect(body).toEqual({ status: 'ok' });
+  });
+
+  it('degraded 不影响 ready：两臂结论逐字段相同，且都落在 §8.1 的预算内', async () => {
+    const measure = async (arm: Arm) => {
+      const startedAt = Date.now();
+      const { status, body } = await getJson(arm.baseUrl, '/api/v1/health/ready');
+      const envelope = body as Record<string, unknown>;
+      return {
+        status,
+        // 刻意**不**比 `traceId`：它每次请求都不同，比它会让这条对照永远红。
+        code: envelope.code,
+        messageKey: envelope.messageKey,
+        retryable: envelope.retryable,
+        withinBudget: Date.now() - startedAt < READY_BUDGET_MS.overall + 500,
+      };
+    };
+    const controlResult = await measure(control);
+    const degradedResult = await measure(degraded);
+    expect(degradedResult).toEqual(controlResult);
+    // 这里的 503 来自 DB 不可达（两臂共享的那一份环境），**不是**来自 AI 未配置。
+    expect(controlResult).toEqual({
+      status: 503,
+      code: 'DEPENDENCY_UNAVAILABLE',
+      messageKey: 'system.dependency.unavailable',
+      retryable: true,
+      withinBudget: true,
+    });
+  });
+
+  it('业务端点按冻结码拒：变异臂上 GET /api/v1/projects 仍是 401 AUTHENTICATION_REQUIRED', async () => {
+    const { status, body } = await getJson(degraded.baseUrl, '/api/v1/projects');
+    expect(status).toBe(401);
+    expect(body).toMatchObject({ code: 'AUTHENTICATION_REQUIRED' });
+    // 冻结码集合没被这一轮改动过：这里用到的码必须本来就在 §5.4 的目录里。
+    expect(isErrorCode('AUTHENTICATION_REQUIRED')).toBe(true);
+  });
+
+  it('setup 那条路没被锁死：PUT /api/v1/settings/secrets/{kind} 在变异臂上不是 404/500', async () => {
+    // §2.1 逐字「进程仍live并仅开放受领取票据保护的setup与诊断」。这条断言盯的是
+    // **路由活着**：装配抛掉 provider 腿的旧写法会让整个容器不存在，于是这个路径连同
+    // 其它一切一起变成进程起不来 —— 用户存不进凭据，F4 的验收判据当场不成立。
+    // 401/403/422 都算通过（未带会话/CSRF 时的冻结码）；404 与 500 不算。
+    const response = await fetch(
+      `${degraded.baseUrl}/api/v1/settings/secrets/QCA_PAT`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: '{}' },
+    );
+    const text = await response.text();
+    const body = text === '' ? null : (JSON.parse(text) as Record<string, unknown>);
+    expect(response.status).not.toBe(404);
+    expect(response.status).not.toBe(500);
+    if (body !== null && typeof body.code === 'string') expect(isErrorCode(body.code)).toBe(true);
+  });
+
+  it('AI 那条腿失败关闭：四个方法一律抛 INTERNAL_ERROR，一个都不返回编造的会话', async () => {
+    const provider = degraded.container.services.provider;
+    const session = {
+      sessionId: 'sess-lq-degraded',
+      identityId: '',
+      templateId: '',
+      environmentId: '',
+      templateVersion: undefined,
+    };
+    const signal = new AbortController().signal;
+    // 四格 == `TurnProviderClient` 的四个方法（`packages/application/src/usecases/ports.ts`）。
+    const calls: readonly (() => Promise<unknown>)[] = [
+      () => provider.createSession({ externalOperationKey: 'k', budgetMs: 1000, abortSignal: signal }),
+      () =>
+        provider.sendUserMessage({
+          session,
+          body: new Uint8Array(0),
+          externalOperationKey: 'k',
+          budgetMs: 1000,
+          abortSignal: signal,
+        }),
+      () => provider.listEvents({ session, cursor: null, budgetMs: 1000, abortSignal: signal }),
+      () => provider.interrupt({ session, externalOperationKey: 'k', budgetMs: 1000, abortSignal: signal }),
+    ];
+    expect(calls).toHaveLength(4);
+    for (const call of calls) {
+      const error: unknown = await call().then(
+        (value) => {
+          // 走到这里就是"编了一个假回复" —— 本轮的红线之一。
+          expect(value, '失败关闭的 provider 竟然返回了值').toBeUndefined();
+          return null;
+        },
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toBeInstanceOf(DomainError);
+      if (error instanceof DomainError) {
+        expect(isErrorCode(error.code)).toBe(true);
+        expect(error.code).toBe('INTERNAL_ERROR');
+        expect(error.valueObject).toBe('TurnProviderClient');
+        expectNoSentinel(describeOf(error));
+      }
+    }
+  });
+
+  it('缺腿时的 provider 身份是**空**的，不是一份编造出来的 id', () => {
+    // 这四个值会被 `pump.ts` 的 `externalCallSlice` 原样写进 `task_private.providerSnapshot`。
+    // 填一个看着像真的假 id 才是红线（对账时会拿它去 provider 侧查一个不存在的会话）；
+    // 空串是「没有身份」的如实记录。对照臂必须**不是**空的，否则这条对任何实现都成立。
+    expect(degraded.container.services.providerConfiguration).toEqual({
+      identityId: '',
+      templateId: '',
+      environmentId: '',
+      templateVersion: '',
+    });
+    expect(control.container.services.providerConfiguration.templateId).not.toBe('');
   });
 });
 
@@ -431,7 +593,7 @@ describe('输出里不出现任何凭据值', () => {
   });
 });
 
-describe('源码级守卫：装配根里没有长驻轮询，运行串逐字透传', () => {
+describe('源码级守卫：无长驻轮询、运行串逐字透传、缺 provider 腿不是致命项', () => {
   const sourcePath = join(import.meta.dirname, '../src/bootstrap/vercel.ts');
   const source = readFileSync(sourcePath, 'utf8');
 
@@ -495,5 +657,56 @@ describe('源码级守卫：装配根里没有长驻轮询，运行串逐字透�
     expect(source.match(/\bsetTimeout\s*\(/g)?.length ?? 0).toBe(1);
     expect(source.match(/\bclearTimeout\s*\(/g)?.length ?? 0).toBe(1);
     expect(READY_BUDGET_MS).toEqual({ overall: 2500, config: 100, database: 1500, object: 1200 });
+  });
+
+  /**
+   * 下面两条**刻意**放在这个 describe 里，而不是上面那个起两臂进程的 describe 里。
+   *
+   * 上面那个的 `beforeAll` 要装配容器；一旦有人把"缺腿就抛"改回去，`beforeAll` 先炸，
+   * 那个 describe 里的**每一条**都变成 skipped —— 包括本该抓住这次回退的源码守卫。
+   * 实测过（把 `?? createFailClosedProvider()` 换成一条真抛错）：9 条全 skipped，
+   * 只有文件级的一条 FAIL。守卫放在这里，它就不依赖容器能不能装起来。
+   */
+  it('ready 探针的形参与函数体里都没有 provider（§8.1「禁止外部AI测试」）', () => {
+    const probe = /function createReadyProbe\(([\s\S]*?)\n\}/.exec(source)?.[0] ?? '';
+    // 阳性对照之一：正则真的捕到了函数，"不含 provider"不是因为捕到了空串。
+    expect(probe).toContain('READY_BUDGET_MS.overall');
+    expect(probe).not.toMatch(/provider/i);
+    // 阳性对照之二：同一条正则 + 同一条断言，在"把 provider 接进 ready"的写法上必须变红。
+    const wired = 'function createReadyProbe(config, db, provider) {\n  return provider.ping();\n}';
+    const wiredProbe = /function createReadyProbe\(([\s\S]*?)\n\}/.exec(wired)?.[0] ?? '';
+    expect(wiredProbe).toMatch(/provider/i);
+  });
+
+  it('装配根里已经没有那条抛错，启动期固定码集合里也没有那个码了', () => {
+    // ⚠️ 一律匹配**形态**，不匹配裸标识符 —— 两个文件的散文里都写着
+    // `PROVIDER_CONFIG_UNREGISTERED` 这个名字，为的是申报"它被删了、为什么删"。
+    // 用裸标识符做零命中门，会因为"写着这条门的注释"而变红。
+    const throwForm = /throw\s+new\s+BootstrapConfigError\s*\(\s*'PROVIDER_CONFIG_UNREGISTERED'/;
+    expect(throwForm.test(source)).toBe(false);
+    // 阳性对照：同一条正则必须能匹配它要拦的那个写法，否则上面那条是永远绿的假绿。
+    expect(
+      throwForm.test("throw new BootstrapConfigError(\n  'PROVIDER_CONFIG_UNREGISTERED',\n)"),
+    ).toBe(true);
+
+    const configSource = readFileSync(
+      join(import.meta.dirname, '../src/bootstrap/config.ts'),
+      'utf8',
+    );
+    const unionForm = /\|\s*'PROVIDER_CONFIG_UNREGISTERED'/;
+    expect(unionForm.test(configSource)).toBe(false);
+    expect(unionForm.test("  | 'PROVIDER_CONFIG_UNREGISTERED';")).toBe(true);
+  });
+
+  it('缺腿时装的是失败关闭适配器，而不是一份编造出来的 provider', () => {
+    // 这条钉住的是"红线的形状"：`createFailClosedProvider` 的四个方法必须**都**指向那个
+    // 抛 `INTERNAL_ERROR` 的实现。把它换成一个返回假 session 的工厂（本轮红线：
+    // "不许编占位 provider、不许写死假回复"），下面两条就红。
+    // 那四条 `toContain` 本身就是阳性对照：正则若什么都没捕到，它们会先失败。
+    const failClosed = /function createFailClosedProvider\(([\s\S]*?)\n\}/.exec(source)?.[0] ?? '';
+    expect(failClosed).toContain("new DomainError('INTERNAL_ERROR', 'TurnProviderClient')");
+    for (const method of ['createSession', 'sendUserMessage', 'listEvents', 'interrupt']) {
+      expect(failClosed, `失败关闭适配器少了 ${method}`).toContain(`${method}: unavailable`);
+    }
   });
 });

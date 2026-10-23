@@ -113,6 +113,13 @@ const POOLED_HOST_MARKER = '-pooler';
 /**
  * 固定码集合。**不是** §5.4 那 42 个对外错误码的一部分 —— 那套是冻结的，不能新增；
  * 这里的码只在进程启动阶段出现，调用方是部署者与运维，不是 HTTP 客户端。
+ *
+ * 这张表只收**致命**项（§2.1「未知driver、生产/preview混绑、密钥格式错误属于致命配置错误，
+ * 拒绝业务装配并仅输出固定修复码」）。曾经有一项 `PROVIDER_CONFIG_UNREGISTERED`
+ * （provider 那条腿没有环境变量能装配出来），已删：缺 provider 属于"待补"而不是致命，
+ * 抛它会把 §3.2 的首启领取入口连同 `PUT /settings/secrets/{kind}` 一起锁死 —— 而那条路
+ * 正是让 provider 之后能被配上的唯一入口。现在缺腿走 degraded，见 `bootstrap/vercel.ts`
+ * 文件头「申报的缺口」第 1 条。
  */
 export type BootstrapConfigCode =
   | 'ENV_SCHEMA_INVALID'
@@ -126,8 +133,7 @@ export type BootstrapConfigCode =
   | 'MIGRATION_URL_UNPARSEABLE'
   | 'SOURCE_CODE_URL_MISSING'
   | 'BUILD_IDENTITY_MISSING'
-  | 'CONNECTION_STRING_HAS_WHITESPACE'
-  | 'PROVIDER_CONFIG_UNREGISTERED';
+  | 'CONNECTION_STRING_HAS_WHITESPACE';
 
 /**
  * 启动期配置错误。

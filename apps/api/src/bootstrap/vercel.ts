@@ -60,18 +60,31 @@
  * §2.2 逐字：「原始异常只在驱动边界转固定码，**禁止 body/SQL 参数/connection URL 落日志**」。
  * 本文件里唯一持有连接串的是 {@link createFormBContainer} 的一个局部常量，它只被交给
  * `createNeonClientSource`，从不进 `Error.message`、从不 `console.*`。失败一律以
- * {@link BootstrapConfigError} 的固定码 + 变量名出去。
+ * `BootstrapConfigError` 的固定码 + 变量名出去。
  *
  * ## ⚠️ 申报的缺口（都不是本文件能就地补的）
  *
- * 1. **provider 那条腿无法从环境变量装配。** §3.1 只登记了 `QCA_AGENT_ID` /
- *    `QCA_AGENT_VERSION` / `QCA_ENVIRONMENT_ID`，而且写明它们「F1完成后由运行期
- *    QcaService幂等创建/选资源并持久化」—— 仓库里**没有** `QcaService`。
- *    `createTurnProviderClient` 要的 `baseUrl` / `identityId` / `templateId` 一个都没登记。
- *    `.env.example` 规则 5 禁止反过来先造名字（「新变量必须先在 ZLQ-157 的清单里登记，
- *    再进 schema，再落一行占位」），所以这条腿只能由启动方显式注入；
- *    {@link createFormBContainer} 在缺它时抛 `PROVIDER_CONFIG_UNREGISTERED`，
- *    **不编一个占位 provider、也不写死假回复**。
+ * 1. **provider 那条腿无法从环境变量装配 —— 缺它现在走 degraded，不抛。**
+ *    §3.1 只登记了 `QCA_AGENT_ID` / `QCA_AGENT_VERSION` / `QCA_ENVIRONMENT_ID`，而且写明
+ *    它们「F1完成后由运行期 QcaService幂等创建/选资源并持久化」—— 仓库里**没有**
+ *    `QcaService`。`createTurnProviderClient` 要的 `baseUrl` / `identityId` / `templateId`
+ *    一个都没登记。`.env.example` 规则 5 禁止反过来先造名字（「新变量必须先在 ZLQ-157 的
+ *    清单里登记，再进 schema，再落一行占位」），所以这条腿只能由启动方显式注入。
+ *
+ *    缺注入时 {@link createFormBContainer} 装配 {@link createFailClosedProvider}：一个
+ *    **真的** `TurnProviderClient`，四个方法一律抛 `DomainError('INTERNAL_ERROR')`。
+ *    这与 `server/scan.ts` 的 `createScanInputAssembler({ configuration: null })` 是同一个
+ *    形状（那边也是"对象照常给，方法失败关闭"），也满足 §8.1「AI未配置是功能degraded
+ *    不是整体503」。**它不是占位 provider**：占位的定义是"假装能用"（返回一个编造的
+ *    session、一段写死的回复），而这个恰恰相反 —— 它唯一能做的事就是失败，且失败用的是
+ *    §5.4 已冻结的码，没有新增任何错误码。
+ *
+ *    ⚠️ 这是本文件对旧行为的一次**明示改动**：原先缺腿抛
+ *    `PROVIDER_CONFIG_UNREGISTERED`，那个码已从 `config.ts` 的 `BootstrapConfigCode` 里
+ *    删掉。理由是抛它会把 §2.1 逐字保护的东西一起锁死：「首启诊断/领取服务不能被尚未
+ *    完成的业务ready检查锁死…进程仍live并仅开放受领取票据保护的setup与诊断」。
+ *    `PUT /settings/secrets/{kind}` 就是那条 setup 路径 —— 装配抛了它，用户就存不进
+ *    凭据，F4 自己的验收判据当场不成立。
  * 2. `sessionTtl` / `workerId` / `secureCookies` 同样没有 §3.1 登记名，同样只能显式注入。
  *    从 `platformEnv` 推 `secureCookies` 看着很方便，但那是**发明一条配置规则**，
  *    与发明一个变量名是同一件事。
@@ -91,27 +104,52 @@
  * 6. **§5.4 的「10秒取锁超时返回 `MIGRATION_LOCKED`」未实现。**
  *    `PostgresDatabaseAdapter.migrate()` 用的是阻塞式 `pg_advisory_xact_lock`。
  *    改它要动 `packages/infra`，不在本单文件面内。
- * 7. **扫描器（`WorkScanner`）拿不到运行时值，只能注入。** 桶导出刻意只给类型；
- *    真正的入口 `@littleq/work-contract/scan` 子路径从 `apps/api` 解析不到 —— 实测
- *    `Cannot find package '@littleq/work-contract/scan'`（该子路径的 exports 只有
- *    `types` + `node`，没有 `default`）。补它要改 work-contract 的 `package.json`
- *    或 `tools/esbuild-config.mjs` 的别名表，两者都在本单文件面外。
- *    本文件**不编一个假扫描器**：`scanner` 是必填注入项。
- * 8. **🚨 目前没有任何东西部署本文件。** Vercel 项目 `littleq` 的
- *    `rootDirectory=apps/web`、`framework=nextjs`、构建命令 `pnpm run web:build`，
- *    函数集只来自 `apps/web/.next`；仓库里既没有根 `vercel.json`、也没有
- *    `apps/api/vercel.json` 或 `api/` 目录，而 `apps/web/vercel.json` 被
- *    `apps/web/test/index.test.ts` 钉住**不许**出现 `functions` / `rewrites` /
- *    `builds` 等键。§1 那一行给出的答案是生成 `deploy/b/main.vercel.json`
- *    （「项目根分别 `apps/web`、`apps/runtime`；API 构建保留 `apps/api` handler 边界」），
- *    而那个文件不存在，指向它就要改**正在线上服务**的项目根与框架。
- *    ⇒ 这是部署拓扑问题，按红线**申报待裁**，不自建项目、不改线上配置。
- *    在那之前，本文件的可达性只到「本地能起、迁移能跑通」。
+ * 7. **扫描器（`WorkScanner`）不由本文件造，`scanner` 是必填注入项。**
+ *    桶导出刻意只给类型（那个 barrel 的文件头写明原因：re-export `createWorkScanner`
+ *    会把 acorn / parse5 / postcss 拖进浏览器产物），运行时值在 `./scan` 子路径上。
+ *    ⚠️ 本轮**更正**了旧版这里的一条错判：子路径并非"从 `apps/api` 解析不到"。实测从
+ *    `apps/api` 目录 `await import('@littleq/work-contract/scan')` 解析得到，导出含
+ *    `createWorkScanner`；解析不到的只有 **vitest**，因为共享别名表把
+ *    `@littleq/work-contract` 映射到 `src/index.ts` 这个**文件**，子路径拼不上
+ *    ⇒ `vitest.config.ts` 单独补了一条子路径别名（只影响测试解析，不进 bundle）。
+ *    装配根仍然不自己造扫描器：造它的那一行属于**进程入口**（`bootstrap/function.ts`），
+ *    放在这里会让"装配"与"选运行时实现"混成一层。本文件**不编一个假扫描器**。
+ * 8. **🚨 部署它的那个 Vercel 项目还不存在；本轮没有创建、没有部署、没有任何计费动作。**
+ *    本轮交付的是让部署成为可能的三样东西，以及一份申报：
+ *    - `bootstrap/function.ts`：真的函数处理器（读环境变量、注入四条腿、装配失败回
+ *      §5.4 冻结的 `INTERNAL_ERROR` 信封），`export default` 一个 `(req, res)` 处理器。
+ *    - `apps/api/api/v1/[...path].js`：平台函数文件，一行 re-export 到
+ *      `dist/bootstrap/function.js` ⇒ 零配置发现即服务 `/api/v1/*`（与 `http.ts:118` 的
+ *      `API_PREFIX`、`apps/web/src/api-proxy.ts:40` 的 `FORWARDED_PREFIX` 逐字对齐）。
+ *    - `apps/api/vercel.json`：`framework: null` / 与 CI 逐字一致的 install /
+ *      `pnpm --filter @littleq/api... build` / `outputDirectory: null`（**安全相关**：
+ *      留空让平台去推，推出来的是 Root Directory 本身，等于把 `apps/api/src/**`
+ *      上传成公开可读）。
+ *
+ *    ⚠️ 配置落 `apps/api/vercel.json` 是对 §1 line 51（生成 `deploy/b/main.vercel.json`）
+ *    的**已申报偏离**，理由与"若裁回原位要改哪三处"都写在 `function.ts` 的文件头。
+ *    它成立的前提是用户裁定一（2026-10-23）把拓扑改成了「后端**单独**一个 Vercel 项目、
+ *    同一个 GitHub 仓库、Root Directory = `apps/api`；现有 `littleq` 项目继续只服务
+ *    `apps/web`」—— Vercel 只从**项目自己的 Root Directory** 读 `vercel.json`。
+ *    仓库根**没有**、也仍然不会有第二份 Vercel 入口（`apps/web/next.config.ts:39-40`
+ *    那条约束；`apps/api/test/function-entry.test.ts` 用一次全仓遍历钉住"只有两份"）。
+ *
+ *    ⇒ 剩下的三件事只能由用户在**平台界面**里做，本文件够不着：建项目并设
+ *    Root Directory = `apps/api`；选 Node.js 24.x（`apps/api/package.json` 的
+ *    `engines.node` 与仓库根同值，平台若忽略这个区间就得手选）；录那 7 个 Sensitive
+ *    变量（**绝不许打进聊天室**）。`LQ_API_ORIGIN` 属于 `apps/web` 那个项目，不在本轮范围。
+ *    在那之前，本文件的可达性是「本地能起、迁移能跑通、函数处理器能真的接住 HTTP」，
+ *    **不含**线上实测。
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
 import type { PasswordHasher, RandomSource, TurnProviderClient } from '@littleq/application';
-import { parseTimestamp, type SessionTtlPolicy, type Timestamp } from '@littleq/domain';
+import {
+  DomainError,
+  parseTimestamp,
+  type SessionTtlPolicy,
+  type Timestamp,
+} from '@littleq/domain';
 import {
   EncryptedSecretStore,
   PostgresDatabaseAdapter,
@@ -124,13 +162,17 @@ import {
 } from '@littleq/infra';
 // ⚠️ 只取**类型**。`createWorkScanner` 这个值在 `@littleq/work-contract` 的桶里
 // 是刻意不 re-export 的（那个 barrel 的文件头逐字写着原因：会把 acorn / parse5 /
-// postcss 拖进浏览器产物），而它真正的运行时入口 `./scan` 子路径**从 apps/api 解析不到**
-// —— 实测 `await import('@littleq/work-contract/scan')` 在 vitest 下报
-// `Cannot find package '@littleq/work-contract/scan'`（子路径的 exports 只写了
-// `types` + `node` 两个条件，没有 `default`）。补它要改 work-contract 的
-// `package.json` 或 tools/esbuild-config.mjs 的别名表，两者都在本单文件边界之外，
-// 属于那个 barrel 自己申报的「需 D0 级别的 package.json 修订才能补」。
-// 所以扫描器只能由启动方注入，本装配根**不编一个假的**。
+// postcss 拖进浏览器产物）；它的运行时入口是 `./scan` 子路径。
+//
+// ⚠️ 本轮**更正**了这里旧版的一条错判：子路径不是"从 apps/api 解析不到"。实测从
+// `apps/api` 目录 `await import('@littleq/work-contract/scan')` 解析得到，导出含
+// `createWorkScanner` 与 `scanPackage`。解析不到的只有 vitest —— 共享别名表把
+// `@littleq/work-contract` 映射到 `src/index.ts` 这个**文件**，子路径拼不上；
+// `vitest.config.ts` 已单独补了一条子路径别名（只影响测试解析，不进 bundle）。
+//
+// ⇒ 于是本文件**能**造扫描器，但**刻意不造**：装配根的职责是"给定这些依赖，装出一个
+// 容器"，而"选哪个扫描器实现、什么时候造"属于进程入口。真正造它的那一行在
+// `bootstrap/function.ts`。本装配根**不编一个假的**：`scanner` 仍是必填注入项。
 import type { WorkScanner } from '@littleq/work-contract';
 
 import { createApiHandler } from '../server/http.js';
@@ -143,7 +185,6 @@ import {
 } from '../server/index.js';
 
 import {
-  BootstrapConfigError,
   runtimeConnectionOf,
   resolveFormBConfig,
   type EnvSource,
@@ -170,9 +211,9 @@ export const READY_BUDGET_MS = {
  *
  * 两个字段都是**可选**的，这不是松弛，是唯一能让运行时守卫编译通过的写法：
  * 若声明成必填，`inputs.provider === undefined` 会被 TS 判成"两个类型没有交集"
- * （TS2367），守卫就成了死代码 —— 而"缺它要抛 `PROVIDER_CONFIG_UNREGISTERED`
- * 而不是编一个占位 provider"恰恰是这条腿唯一还需要被执行的行为。
- * 类型上可选 = 承认「没有任何环境变量能产出它」这个已申报的事实。
+ * （TS2367），守卫就成了死代码。类型上可选 = 承认「没有任何环境变量能产出它」这个
+ * 已申报的事实；而守卫的**行为**是装一个失败关闭的 provider（{@link createFailClosedProvider}），
+ * 不是抛 —— 抛会把 §2.1 保护的 setup / 领取入口一起锁死。
  */
 export interface ProviderLeg {
   readonly provider?: TurnProviderClient;
@@ -181,6 +222,47 @@ export interface ProviderLeg {
     readonly templateId: string;
     readonly environmentId: string;
     readonly templateVersion: string;
+  };
+}
+
+/**
+ * 缺腿时喂给 `composeApiServices` 的 provider 身份：四个字段一律空串。
+ *
+ * 它**不是**一份编造的身份（编造才是红线），而是「没有身份」的如实表示。
+ * `pump.ts` 的 `externalCallSlice` 会把这四个值原样写进 `task_private` 的
+ * `providerSnapshot`，于是库里留下的是"这条任务是在没有 provider 配置的情况下被推进的"
+ * —— 对账时这比一个看起来像真 id 的假值有用得多。
+ */
+const UNCONFIGURED_PROVIDER_CONFIGURATION = {
+  identityId: '',
+  templateId: '',
+  environmentId: '',
+  templateVersion: '',
+} as const;
+
+/**
+ * **失败关闭**的 `TurnProviderClient`（文件头缺口 1）。
+ *
+ * 为什么是 `INTERNAL_ERROR` 而不是 `QCA_CREDENTIAL_NOT_CONFIGURED`：后者会说谎。
+ * 那个码的语义是「学生没存 PAT」，而走到这里的处境恰恰相反 —— 学生**存了**
+ * （`turns.ts:235` 那道门放行了才可能有任务），缺的是服务端自己的 provider 部署配置。
+ * `INTERNAL_ERROR` = 500 / `system.unavailable` / 不可重试，语义正是「服务端自己没准备好」，
+ * 与 `server/scan.ts` 未配扫描策略时选的是同一个码、同一条理由（§5.4 的 42 码冻结 ⇒
+ * 只能复用，不能新增）。
+ *
+ * `mapExternalFailure`（`packages/application/src/usecases/pump.ts`）对 `DomainError`
+ * 原样放行，所以这个码一路走到 HTTP 层，不会被改写成 `QCA_UNREACHABLE` 那种
+ * 「网络问题、可重试」的形状 —— 重试一个没配好的部署不会有不同结果。
+ */
+function createFailClosedProvider(): TurnProviderClient {
+  const unavailable = async (): Promise<never> => {
+    throw new DomainError('INTERNAL_ERROR', 'TurnProviderClient');
+  };
+  return {
+    createSession: unavailable,
+    sendUserMessage: unavailable,
+    listEvents: unavailable,
+    interrupt: unavailable,
   };
 }
 
@@ -198,9 +280,11 @@ export interface FormBBootstrapInputs extends ProviderLeg {
   readonly hasher?: PasswordHasher;
   /**
    * **必填注入**，理由见上面 `@littleq/work-contract` 那条 import 的注释：
-   * 本装配根拿不到 `createWorkScanner` 这个值。仓库里已有的先例也是这么办的 ——
-   * `apps/api/test/turn-to-task-to-safe-event.test.ts:70` 用相对源码路径取运行时，
-   * 并在文件头把这件事申报为「扫描器走相对源码导入」。
+   * 装配根不选运行时实现，进程入口才选（`bootstrap/function.ts` 从 `./scan` 子路径造一个
+   * 真的）。测试里怎么取到这个值有两种既有写法：走子路径（本轮给 `vitest.config.ts`
+   * 补了别名之后可用，见 `apps/api/test/function-entry.test.ts`），或走相对源码路径
+   * （`apps/api/test/turn-to-task-to-safe-event.test.ts:70` 与
+   * `apps/api/test/bootstrap-container.test.ts` 的既有先例）。两者拿到的是同一份实现。
    */
   readonly scanner: WorkScanner;
   /** `null` = 未配置扫描策略 ⇒ `assemble` 失败关闭（见文件头缺口 4）。 */
@@ -227,6 +311,17 @@ export interface FormBContainer {
    * 要问"现在到底行不行"，用 {@link probeNow} —— `ready` 每次请求都重跑它。
    */
   readonly bootSelfCheckOk: boolean;
+  /**
+   * provider 那条腿到底有没有被注入（文件头缺口 1）。
+   *
+   * `false` = 这个容器是 degraded 的：setup / 诊断 / 领取入口照常开放，AI 任务路径一律
+   * 以 `INTERNAL_ERROR` 失败关闭。它与 {@link bootSelfCheckOk} 是**两件独立的事**，
+   * 所以不合并成一个布尔：`bootSelfCheckOk` 只覆盖 §8.1 的三项硬检查（配置 / DB / 对象），
+   * §8.1 逐字「禁止外部AI测试」「AI未配置是功能degraded不是整体503」⇒ provider 既不在
+   * 硬检查里，也就**不许**影响 `ready`。合成一个值会让"DB 挂了"与"AI 没配"变成同一个
+   * 信号，运维就分不清该修哪一个。
+   */
+  readonly providerLegConfigured: boolean;
   /** 立即跑一次 §8.1 的自检。装配时已经跑过一次；这个出口留给 `ready` 与运维。 */
   probeNow(): Promise<void>;
   /** 本地起一个常驻监听（生产不调用）。返回实际基址。 */
@@ -308,9 +403,10 @@ function createReadyProbe(
  * 本文件就是 F4 补上的那一段。
  *
  * **只有致命项才抛**（§2.1「未知driver、生产/preview混绑、密钥格式错误属于致命配置错误，
- * 拒绝业务装配并仅输出固定修复码」）：配置解析失败、主密钥缺失/非法、provider 腿缺注入。
+ * 拒绝业务装配并仅输出固定修复码」）：配置解析失败、主密钥缺失/非法。
  * 抛的时候不返回半成品 —— 一个装配到一半的容器比一个明确的启动失败危险得多。
- * 依赖"待补"（DB 连不上、扫描策略未配）**不抛**，理由见第 5 步的引文。
+ * 依赖"待补"（DB 连不上、扫描策略未配、**provider 腿缺注入**）**不抛**，
+ * 理由见第 5 步的引文与文件头缺口 1。
  */
 export async function createFormBContainer(
   inputs: FormBBootstrapInputs,
@@ -320,16 +416,14 @@ export async function createFormBContainer(
   // —— §2.1 第 1–3 步：形态 / 平台标识 / Zod 校验 / 允许组合
   const config = resolveFormBConfig(env);
 
-  if (inputs.provider === undefined || inputs.providerConfiguration === undefined) {
-    throw new BootstrapConfigError(
-      'PROVIDER_CONFIG_UNREGISTERED',
-      ['QCA_AGENT_ID', 'QCA_AGENT_VERSION', 'QCA_ENVIRONMENT_ID'],
-      'provider 那条腿无法从环境变量装配：§3.1 只登记了这三个，而 ' +
-        '`createTurnProviderClient` 要的 baseUrl / identityId / templateId 一个都没登记，' +
-        '登记了的那三个又依赖一个仓库里还不存在的运行期 QcaService。' +
-        '.env.example 规则 5 禁止反过来先造名字，所以这里失败关闭，等 ZLQ-157 §3.1 补登记。',
-    );
-  }
+  // provider 腿缺注入 ⇒ degraded，**不抛**（文件头缺口 1）。
+  // 与 DB / 扫描策略走的是同一条路：装配继续，事实记在容器上，业务端点各自失败关闭。
+  // 两个字段一起判、一起换：`pump.ts` 会同时读 `services.provider` 与
+  // `services.providerConfiguration`，只补一个会留下"有 client 没身份"的半装配状态。
+  const providerLegConfigured =
+    inputs.provider !== undefined && inputs.providerConfiguration !== undefined;
+  const provider = inputs.provider ?? createFailClosedProvider();
+  const providerConfiguration = inputs.providerConfiguration ?? UNCONFIGURED_PROVIDER_CONFIGURATION;
 
   // —— 第 4 步：DB / 对象 / secret（publisher 未装配，见文件头缺口 3）
   // 连接串只在下面这一个局部常量里存在过，直接交给驱动，不进任何消息。
@@ -387,8 +481,8 @@ export async function createFormBContainer(
     artifacts: objects.artifacts,
     scanner: inputs.scanner,
     scanConfiguration: inputs.scanConfiguration ?? null,
-    provider: inputs.provider,
-    providerConfiguration: inputs.providerConfiguration,
+    provider,
+    providerConfiguration,
     sessionTtl: inputs.sessionTtl,
     workerId: inputs.workerId,
     secureCookies: inputs.secureCookies,
@@ -409,6 +503,7 @@ export async function createFormBContainer(
     handler,
     db,
     bootSelfCheckOk,
+    providerLegConfigured,
     probeNow,
     async listen(port: number) {
       const server: Server = createServer(handler);
