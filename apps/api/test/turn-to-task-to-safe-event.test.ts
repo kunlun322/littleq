@@ -24,15 +24,23 @@
  * 账号口令、QCA PAT 明文一律在运行时用 `nodeRandomSource()` 生成，源码与失败信息里都
  * 不出现字面值（§7.3、§8）。断言凭据被正确使用时比的是**相等性**，不是打印。
  *
- * ## 扫描器走相对源码导入（申报）
+ * ## 扫描器怎么取到（原「相对源码导入」的申报已解除）
  *
- * `createWorkScanner` 只在 `@littleq/work-contract/scan` 子路径上，而 `vitest.config.ts`
- * 复用的那份别名表（`tools/esbuild-config.mjs`）把 `@littleq/work-contract` 映射成
- * `src/index.ts` 一个**文件**，前缀匹配于是把子路径解析成 `src/index.ts/scan`。一行修法
- * 是把别名换成 `find`/`replacement` 形式或补一条子路径条目，但那个文件在 ZLQ-232 的
- * 文件面里，本单只申报、不改。本竖切止于 `AWAITING_SESSION_RECEIPT` 那一片，扫描器
- * 根本不会被调用；这里仍然装一个**真的**扫描器，而不是装一个"被调用就抛"的替身 ——
- * 后者会让"没走到 SCANNING"这件事看起来像是被替身掩盖的。
+ * `createWorkScanner` 只在 `@littleq/work-contract/scan` 子路径上。本文件**曾经**用相对
+ * 源码路径取它，并申报原因是「`vitest.config.ts` 复用的那份别名表
+ * （`tools/esbuild-config.mjs`）把 `@littleq/work-contract` 映射成 `src/index.ts` 一个
+ * **文件**，前缀匹配于是把子路径解析成 `src/index.ts/scan`」，同时写明一行修法是
+ * 「补一条子路径条目」但「那个文件在 ZLQ-232 的文件面里，本单只申报、不改」。
+ *
+ * ✅ 那条修法本轮已落地：`vitest.config.ts` 现在补了一条 `@littleq/work-contract/scan`
+ * 子路径别名，**排在**共享别名表展开之前（Vite 的字符串别名做前缀匹配，顺序是有意义的），
+ * 且刻意**没有**写回 `tools/esbuild-config.mjs` —— 那张表同时喂浏览器 bundle，把服务端
+ * 解析器家族加进去正是那个 barrel 只导出类型要拦的事。于是本文件改用子路径说明符，
+ * 与生产入口 `apps/api/src/bootstrap/function.ts` 同一条路径。
+ *
+ * 本竖切止于 `AWAITING_SESSION_RECEIPT` 那一片，扫描器根本不会被调用；这里仍然装一个
+ * **真的**扫描器，而不是装一个"被调用就抛"的替身 —— 后者会让"没走到 SCANNING"这件事
+ * 看起来像是被替身掩盖的。
  */
 import { createServer, type Server } from 'node:http';
 
@@ -67,7 +75,7 @@ import {
   type TestDatabaseHarness,
 } from '../../../packages/infra/test/support-database.js';
 import { rejectedCode } from '../../../packages/infra/test/support.js';
-import { createWorkScanner } from '../../../packages/work-contract/src/scan/index.js';
+import { createWorkScanner } from '@littleq/work-contract/scan';
 
 import {
   composeApiServices,
