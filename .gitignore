@@ -61,3 +61,4 @@ playwright/.cache/
 # 注意 out/ 与 .next/ 已在上面「依赖与构建产物」一节被忽略，这里只补 public/ 下的生成物。
 apps/web/public/legal/
 apps/web/public/licenses.txt
+apps/api/public/
