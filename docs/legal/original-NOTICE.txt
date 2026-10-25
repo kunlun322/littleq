@@ -1,0 +1,52 @@
+LittleQ
+Copyright (C) 2026 LittleQ contributors（LittleQ 贡献者）
+
+本项目为自由软件：你可以按自由软件基金会发布的 GNU Affero General Public
+License 第 3 版（AGPL-3.0）的条款对其进行再分发和/或修改。许可证全文见本
+仓库根目录的 LICENSE 文件。
+
+This product is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License version 3 (AGPL-3.0) as
+published by the Free Software Foundation. See the LICENSE file in the root of
+this repository.
+
+--------------------------------------------------------------------------
+AGPL-3.0 网络条款（§13）提示
+
+若你修改本项目并通过网络向用户提供服务（包括部署给学校、机构或任何第三方
+访问），你必须向这些用户提供获取你所修改版本"对应源码"的途径。产品内常驻
+的「源码与许可证」入口，其版本号与源码地址必须可配置，并指向实际运行的版本。
+
+--------------------------------------------------------------------------
+修改说明约定（AGPL-3.0 §5）
+
+再分发或部署修改版本时，必须在显著位置说明：你修改了本项目、修改日期，并
+随附本 NOTICE 与 LICENSE 文件。建议修改者在仓库根目录维护 MODIFICATIONS.md
+记录重大修改。
+
+--------------------------------------------------------------------------
+IP 与美术资产：独立于代码授权（占位，具体条款待补）
+
+小黄鸭 Little Q 的形象、名称、插画、音效等美术与品牌资产 **不** 包含在上述
+AGPL-3.0 代码授权范围内，适用单独授权条款。条款由项目所有者另行发布，在
+定稿前仅作如下占位约定：
+
+- 自部署者的非商业使用与白标替换（换掉鸭子形象与名称）：拟允许，以最终
+  条款为准；
+- 商业使用：需单独授权；
+- 白标替换后，站内「源码与许可证」入口仍必须保留——AGPL 义务不因更换品牌
+  而消失。
+
+在此条款定稿前，请勿将 Little Q 形象或名称用于本项目部署之外的任何用途。
+
+--------------------------------------------------------------------------
+第三方内容
+
+随仓库分发的字体、图片、音效等素材必须具有可再分发的商用授权，其许可清单
+与代码依赖许可清单分开维护。当前仓库尚未包含任何第三方**素材**（站点上的
+小黄鸭造型是仓库内原创 CSS 几何图形，不使用外部图片、字体或 CDN）。
+
+代码依赖的许可清单是仓库根目录的 THIRD_PARTY_LICENSES 文件，由
+`pnpm license:third-party` 从 pnpm-lock.yaml 的完整依赖闭包生成，并由
+`pnpm license:third-party:check` 逐字节校验；它随站点部署到
+/legal/THIRD_PARTY_LICENSES.txt。构建产物另有旁挂的 /licenses.txt 归因清单。

@@ -1,16 +1,43 @@
 {
-  "$schema": "https://json.schemastore.org/tsconfig",
-  "files": [],
-  "references": [
-    { "path": "./packages/domain" },
-    { "path": "./packages/application" },
-    { "path": "./packages/api-contract" },
-    { "path": "./packages/work-contract" },
-    { "path": "./packages/design-system" },
-    { "path": "./packages/infra" },
-    { "path": "./apps/api" },
-    { "path": "./apps/worker" },
-    { "path": "./apps/runtime" },
-    { "path": "./apps/web" }
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".data",
+    ".next"
   ]
 }

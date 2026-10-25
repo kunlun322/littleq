@@ -1,6 +1,0 @@
-{
-  "private": true,
-  "name": "nolicensefield",
-  "version": "1.0.0",
-  "description": "故意不声明 license 字段：这是 issue 点名的禁止项，解析器不得降级或猜测。"
-}

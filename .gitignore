@@ -1,64 +1,10 @@
-# ── 凭证与密钥：第一道防线（PRD F9.2 / C13）──────────────────────────────
-# 任何真实凭证都不得进入仓库；以下规则只是兜底，不依赖它。
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-secrets.*
-local.properties
-.vercel/
-.wrangler/
-
-# ── 依赖与构建产物 ────────────────────────────────────────────────────────
 node_modules/
-dist/
-build/
-out/
 .next/
-.nuxt/
-.turbo/
-.cache/
-coverage/
-
-# ── Python ───────────────────────────────────────────────────────────────
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-
-# ── 日志 ─────────────────────────────────────────────────────────────────
-*.log
-logs/
-
-# ── 操作系统 / 编辑器 ─────────────────────────────────────────────────────
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.swp
-
-# ── 本任务新增：工具产物与增量构建缓存（只追加，不改上面任何一条）──────────
-# artifacts/ 是许可证报告、SBOM、bundle 与法务注释清单的落地目录：
-# 全部可由 `pnpm verify` 从 lockfile 重新生成，入库只会在审计时制造过期副本。
-artifacts/
+out/
+.data/
+.env*
+!.env.example
 *.tsbuildinfo
-# `next build` / `next dev` 生成的 TS 环境声明：正文是对 `.next/types/*.d.ts` 的引用，
-# 而 `.next/` 已在上面被忽略。入库只会得到一份随 Next 版本漂移的生成物（它自带
-# 「should not be edited」），与 *.tsbuildinfo 同处理。apps/web/tsconfig.json 仍把它列进
-# include —— 文件不存在时该 include 条目匹配为空，typecheck 照旧自足（§6.1）。
 next-env.d.ts
-playwright-report/
-test-results/
-blob-report/
-playwright/.cache/
-
-# ── 站点法务副本（ZLQ-190 §7）────────────────────────────────────────────
-# 这四份文件由 tools/prepare-web-legal.mjs 在 `pnpm web:build` 期间从仓库根
-# **逐字节复制**过来（LICENSE / NOTICE / THIRD_PARTY_LICENSES / bundle 归因清单），
-# 入库只会制造与源头漂移的过期副本 —— 而 THIRD_PARTY_LICENSES 本身由
-# license:third-party:check 逐字节校验，副本却不在校验范围内。
-# 注意 out/ 与 .next/ 已在上面「依赖与构建产物」一节被忽略，这里只补 public/ 下的生成物。
-apps/web/public/legal/
-apps/web/public/licenses.txt
-apps/api/public/
+.vercel
+*.log

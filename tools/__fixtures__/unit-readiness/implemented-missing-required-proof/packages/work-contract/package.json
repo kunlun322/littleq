@@ -1,9 +1,0 @@
-{
-  "name": "@littleq/work-contract",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "zod": "^4.6.7"
-  }
-}
