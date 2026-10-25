@@ -4,6 +4,12 @@
 
 应用采用单体 Next.js 架构，页面与服务端 API 在同一个项目内，不需要单独部署前端、后端或工作队列。
 
+## 界面一览
+
+![Little Q 界面轮播：首页、能力介绍、创作工作台、3D 作品、界面风格、作品广场](docs/screenshots/showcase.gif)
+
+<sub>自动轮播：首页 → 能力介绍 → 创作工作台 → 3D 作品 → 界面风格 → 作品广场。也可以单独查看 [原始截图](docs/screenshots)。</sub>
+
 ## 文档入口
 
 - [部署手册](docs/DEPLOYMENT.md)：系统依赖、全部环境变量、本地 / Docker / Vercel 的填写位置、启动与验收。
